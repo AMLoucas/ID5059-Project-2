@@ -1,0 +1,708 @@
+## Python and R Hybrid
+
+How can we use both?
+The `reticulate` library (2020) enables us to use both Python and R functions and coding in one place, a R Markdown file.
+
+``` {r, setup}
+library(reticulate)
+# use_virtualenv("r-reticulate")
+# use_python("usr/local/bin/python3.8")
+# py_install("package")
+```
+
+More information on the library specifications and functionalities can be found [here](https://rstudio.github.io/reticulate/)
+
+Source all functions from the python script `Imputation_Simulation_Study()`
+
+``` {r}
+source_python("Imputation_Simulation_Study.py")
+```
+
+---
+
+## References
+
+**References for this document**
+
+[1 : Flexible Imputation of Missing Data - Second Edition - Stef Van Buuren](https://stefvanbuuren.name/fimd/)
+
+[2 : Inference and Missing Data - Rubin](https://www.jstor.org/stable/2335739?seq=1)
+
+[3 : MICE: Multivariate Imputation by Chained Equations in R](https://www.researchgate.net/publication/44203418_MICE_Multivariate_Imputation_by_Chained_Equations_in_R)
+
+[4 : MissForest—non-parametric missing value imputation for mixed-type data](https://academic.oup.com/bioinformatics/article/28/1/112/219101)
+
+[5 : Imputing Missing Data with R MICE Package](https://datascienceplus.com/imputing-missing-data-with-r-mice-package/)
+
+## Imputation
+
+> Imputation is the act of converting an incomplete sample into a complete sample. [1]
+
+The idea behind this analysis is to construct a simulation study. This traditionally can be split into three key steps:
+
+1. Simulation Step
+2. Application of Methods
+3. Assessing Performance of Methods
+
+----
+
+### 1. **Removing Data At Random** [Simulation Step]
+
+#### Types of Missing Data
+
+Rubin [2] classified missing data problems into three categories, which are all driven by the so-called **response mechanism**.
+This mechanism can be modelled, as long as an assumption is made as to which response mechanism drove the data to be missing in the first place. The categories are **Missing Completely at Random** (MCAR), **Missing at Random** (MAR), **Missing not at Random** (MNAR). In short, these can be described as;
+
+1. **MCAR** : when the probability of data missing is the same across the entire datset.
+2. **MAR** : when the probability of data missing is the same across groups within the dataset.
+3. **MNAR** : when the probability of data missing depends on an unknown factor.
+
+The current **methodologies** in the literature rely on a **key assumption** choice of either three categories. Hence, certain methods will be more suitable than others depending on the data and whether the assumption is met or not will underpin the validity of statistical inferences.
+
+Another important distinction to make it between **Univariate** and **Multivariate Missing Data**. These are defined as the problem where only one feature is missing and the problem where more than one feature is missing respectively. In our simulation function we will have freedom to choose every time which case to be in.
+
+#### In Practice
+
+For this special case, the simulation step is slightly unusual. Normally one would sample from a known distribution, however in this instance the sampling happens as way to **identify the location of the values which will be dropped**, i.e. become NaN.
+
+1. For the **MCAR** Case:
+
+  Mathematically, let $n$ be the total number of observations (rows) in the dataset and $m$ be the total number of features (columns) in the dataset. Hence, let $U_1$ and $U_2$ be two sets $U_1 \in {1,...,n} \text{  and } U_2 \in {1,...,m}$. By sampling with replacement k times from these two sets independently, such that any outcome is equally likely, the resulting ordered outcomes indicate the indexing of the element which will be dropped. These indexes can be viewed as the tuples $(u_1{_i}, u_2{_i}) \text{  for  } i \in {1,...,k}$.
+  
+2. For the **MAR** Case:
+
+  *Maybe to do??? could add an input to the simulation function() like data_type where it can take values "MCAR" or "MAR"*
+  *Could be interesting to see if MICE methods perform better when there is actually an underlying relationship which drives the presence of the missing data, i.e. their assumption is met*
+
+##### Function to Remove Data (in Python)
+
+``` {python eval = FALSE}
+
+def remove_random_values(true_df, columns, percentage):
+    """
+    Funtion the will remove values from the selected columns at random,
+    then replace the removed values with np.nan which is NaN.
+
+    PSEUDOCODE:
+
+    1. Random sample row indexes (with replacement)
+    2. Random sample column labels (with replacement)
+    3. Extract random entry using 1. and 2. and replace with np.nan
+    4. Repeat (1-3) until total proportion of data has been extracted
+
+    :param df: pandas DataFrame which is the full data
+    :param columns: list of columns to 'drop' values from. Note: must be string name of columns
+    :param percentage: float input such as 0.20 (i.e. 20%)
+    :return: pandas DataFrame of the same shape as the original with NaN entries
+    """
+
+    start = time.time()
+    
+    # Set up: Focus on subset of data dependent on columns,
+    #         hence extract information about subset and number of values to drop
+    subset = true_df[columns].copy()
+    nrow, ncol = true_df[columns].shape
+    n_samples = int(percentage*nrow)
+
+    # 1. Pick out a vector of random samples (row indexes)
+    row_indexes = np.arange(0, nrow, 1).tolist()
+
+    # 2. Sample with replacement from the list of possible indexes
+    #    note, `choices` is used to sample with replacement
+    sampled_row_indexes = random.choices(row_indexes, k = n_samples)
+    sampled_columns = random.choices(columns, k = n_samples)
+
+    # 3. Extract entry and replace accordingly 
+    for i in range(0, n_samples):
+        if sampled_columns[i][0:3] == 'cat':
+            subset.loc[sampled_row_indexes[i], sampled_columns[i]] = 'nan'
+        else:
+            subset.loc[sampled_row_indexes[i], sampled_columns[i]] = -1
+            # this is the convention for a number of sklearn packages
+
+    # Notes: having it as a loop ensures we are not holding a massive dataframe in memory so its a lot faster.
+    # Notes: must use 'nan' and numerical as np.nan would not be updated in step 4. otherwise.
+
+    # 4. Update data frame with new NaN values
+    true_df.update(subset)
+    true_df = true_df.replace('nan', np.nan)
+    true_df = true_df.replace(-1, np.nan)
+
+    end = time.time()
+    print("Random Sampling Complete - Time Elapsed : ", end - start)
+
+    return(true_df)
+
+```
+
+----
+
+### 2. **Choosing the Imputation Methods** [Methods Step]
+
+#### Types of Models
+
+The simplest and most common solutions for missing data problems are 
+
+* *likewise deletion*, which is simply removing the rows with missing elements from the dataset,
+* *mean* or *median imputation*, which is substituting the missing feature with the sample mean or median over all observed values in that same feature column.
+* *regression imputation*, which is about creating a regression model, hence incorporating the effects of other features, and using the model to predict the missing data.
+* *stochastic regression imputation*, which is similar as above but incorporates variability of the predictions.
+* *and more...*
+
+In general however, these fall into two broad categories: **Univariate** and **Multivariate Imputation Methods**.
+This simply indicates whether the method takes into account all the data features to determine the missing data (multivariate) or only the column the missing data belongs to (univariate). 
+
+There is a key increase in **computational effort when using multivariate methods**, however these often perform better as they take into consideration the relationship between all the data when making a choice. This implies that often **correlation structures** across features are kept intact, compared to univariate methods which completely disregard them. 
+
+For the sake of this analysis and simulation study, we will explore both in some level of detail.
+
+Due by **multivariate nature of the sampling** *(i.e. dropping data from more than one feature)*, there are three main strategies to consider:
+
+1. **Monotone data imputation**. Imputations are created by a sequence of univariate methods;
+2. **Joint modeling**. Imputations are drawn from a multivariate model fitted to the data;
+3. **Fully conditional specification**, also known as multivariate imputation by chained equations. A multivariate model is implicitly specified by a *set of conditional univariate models*. Imputations are created by drawing from iterated conditional models.
+
+    **Note** : 1. is better suited for monotone missing data patterns and 2. and 3. are suitable for general missing data patterns.
+
+#### **Univariate Methods** to consider:
+
+Univariate imputation methods chosen fall into some of the standard ideas which were mentioned before.
+
+* `Median SimpleImputer`, this is a standard sklearn imputer which takes the column feature and uses the median value as the imputed value all missing values. *Note*: this only copes with numerical features.
+
+* `MostFrequent SimpleImputer`, this is another standard sklearn imputer which takes the column feature and uses the most frequent category as the imputed value for all missing values. *Note*: this only copes with categorical features.
+
+##### Function to Run Univariate Imputation Methods
+
+``` {python eval = FALSE}
+
+def univariate_imputation_method(nans_df, type):
+    """
+    Function which runs through our chosen three methods: Median Imputation, and Most Frequent Imputation
+
+    :param nans_df: pandas DataFrame which has missing data - subset on the columns to impute only
+    :param type: string input, 'cat' or 'cont' to specify appropriate imputation method to use
+    :return: the imputed dataset
+    """
+
+    start = time.time()
+
+    ##### DEPLOY METHODS:
+
+    imputed_data = nans_df.copy()
+
+    if type == 'cont':
+
+      ### STRATEGY 1: MEDIAN IMPUTATION
+      median_imputer = SimpleImputer(strategy = "median")
+      median_imputer.fit(imputed_data)
+      raw_output = median_imputer.transform(imputed_data)
+
+      imputed_data = pd.DataFrame(raw_output,
+                                   columns = imputed_data.columns,
+                                   index = imputed_data.index)
+
+      end = time.time()
+
+      print("Median Imputation Complete - Time Elapsed :", end - start)
+
+    elif type == 'cat':
+
+      ### STRATEGY 2: MOST FREQUENT IMPUTATION
+      median_imputer = SimpleImputer(strategy = "most_frequent")
+      median_imputer.fit(imputed_data)
+      raw_output = median_imputer.transform(imputed_data)
+
+      imputed_data = pd.DataFrame(raw_output,
+                                   columns = imputed_data.columns,
+                                   index = imputed_data.index)
+
+      end = time.time()
+
+      print("Most Frequent Imputation Complete - Time Elapsed :", end - start)
+
+    return imputed_data
+
+```
+
+#### **Multivariate Methods** to consider:
+
+For this analysis we focused on two key approaches.
+
+* `MICE`, Multivariate Imputation by Chained Equations. More info can be found in the [docs](https://www.rdocumentation.org/packages/mice/versions/3.13.0/topics/mice)
+
+* `MissForest` Imputer, this is a Nonparametric Missing Value Imputation using **Random Forest**. More info can be found in the [docs](https://cran.r-project.org/web/packages/missForest/missForest.pdf)
+   
+    **Note** : both cope with mixed data well.
+
+``` {python messages = FALSE, eval = FALSE, echo = FALSE}
+
+true_df = pd.read_csv("data/train.csv")
+nans_df = remove_random_values(true_df.copy(), ['cat0', 'cat1'], 0.2)
+imp_df = univariate_imputation_method(nans_df[['cat0', 'cat1']], type = 'cat')
+res_col1, res_col2 = performance_results(true_df, imp_df, nans_df, ['cat0', 'cat1'])
+
+# print("Accuracy Scores", res_col1[1], res_col2[1])
+
+# This is necessary due to bug in transformation of dataset from Python to R 
+nans_df = nans_df.replace(np.nan, 'NA')
+
+```
+
+``` {r message = FALSE, eval = FALSE, echo = FALSE}
+
+# - - - - 
+# 1. extract data
+true_df <- py$true_df
+nans_df <- py$nans_df
+# summary(nans_df)
+
+# note: there is a slight conversion issue between NaN and NA, hence we can explicitly use
+nans_df[nans_df == 'NA'] <- NA
+# summary(nans_df)
+
+# note: all character types must be changed to factor
+true_df <- as.data.frame(unclass(true_df))
+nans_df <- as.data.frame(unclass(nans_df))
+# str(nans_df)
+
+# - - - - 
+
+# 2. extract all categorical variables to subset dataframe
+list_cat <- c('cat0')
+for (i in seq(1:10)) {
+  list_cat <- c(list_cat, paste0('cat', i))
+}
+# nans_df[list_cat]
+
+# 3. extract all numerical variables to subset dataframe
+list_cont <- c('cont0')
+for (i in seq(1:8)) {
+  list_cont <- c(list_cont, paste0('cont', i))
+}
+# nans_df[list_cont]
+
+list_comp <- c('cont0', 'cat0') #, 'cat9', 'cat10')
+for (i in seq(1:2)) {
+  list_comp <- c(list_comp, c(paste0('cont', i), paste0('cat', i)))
+}
+# nans_df[list_cont]
+
+```
+
+##### MICE Fitting and Function
+
+One of the key assumptions of MICE is that the **response mechanism is MAR**. Hence, that there is value in imputing values using a combination of all other features of the data. Which features are used as the *predictive variables* for the *imputed values* is shown in the output of PredictiveMatrix.
+
+> For datasets containing hundreds or thousands of variables, using all predictors may not be feasible (because of multicollinearity and computational problems) to include all these variables. It is also not necessary. [1]
+
+The **recommended steps for large datasets**, in short, are:
+
+1. Include all features that appear in the model that will be applied to the data after imputation, including the outcome.
+2. Include any feature which is known to be likely to be a driver for the missing data.
+3. Include any feature which seems to explain a lot of the variance of the data.
+
+**Note** : The mice package contains several tools that aid in automatic predictor selection. The `quickpred()` function is a quick way to define the predictor matrix using the strategy outlined above. [3] ...  The mice() function detects multicollinearity, and solves the problem by removing one or more predictors for the model. Each removal is noted in the loggedEvents element of the mids object.
+
+Lastly, there is a wide range of choices in terms of the `methods` to deploy for this multivarite fitting.
+More information can be found at [1] - *Section 6.3 Model form and predictors*.
+
+The **default methods used** are:
+
+* for unordered factor variables with more than two levels : `polyreg` - Bayesian Polytomous Regression
+* for continuous variables : `ppm` - Predictive Mean Matching
+
+``` {r messages = FALSE, eval = FALSE}
+
+### MICE FITTING
+
+library(mice)
+
+columns_incl_predictors = c('cat0', 'cat1', 'cont0')
+imp_df <- mice(nans_df[columns_incl_predictors], m = 5, maxit = 5)
+
+```
+
+**Notes**;
+
+* Interestingly, when running the MICE imputer on the categorical data only, this error comes up:
+
+  `# Error in edit.setup(data, setup, ...) : mice detected constant and/or collinear variables. No predictors were left after their removal`
+
+  Which indicates to me that all categorical variables may be drawn from the exact same sampling and that the labelling has no true meaning.
+  Hence, for some meaningful predictions I kept a continuous feature `cont0` as the main predictor for both categorical features to impute.
+
+
+##### MissForest Fitting and Function
+
+*todo : add research on MissForest here - check out article linked as reference [3]*
+
+``` {r messages = FALSE, eval = FALSE}
+
+### MISSFOREST FITTING
+
+library(missForest)
+
+imp_df <- missForest(nans_df[columns_incl_predictors])$ximp
+mixError(imp_df, nans_df[columns_incl_predictors], true_df[columns_incl_predictors])
+
+```
+
+**Notes**;
+
+* By construction of algorithm cannot run on categorical variables with more than 53 factors: drop cat10 and cat8 and cat5
+
+----
+
+### 3. **Evaluating Performance of the Imputation Methods** [Evaluation Step]:
+
+#### Types of Adequate Performance Metrics:
+
+##### For Continuous Features:
+
+* **Normalized Root Mean Squared Error (NRMSE)**:
+
+  $\sqrt{mean((X_{true} − X_{imp})^2)/var(X_{true})}$
+
+  where
+    $X_{true}$ the complete data matrix and $X_{imp}$ the imputed data matrix
+    
+  *For good performance we expect values to be close to zero.*
+    
+* **Difference between true value and imputed value**
+
+  $D = x_{true} - x_{imp}$
+  
+  where
+    $x_{true}$ the true value from the data matrix and $x_{imp}$ the imputed value from the data matrix
+    
+  *For good performance we expect values to be concentrated about zero.*
+    
+* **Percentage difference between true value and imputed value**
+
+  $PD = 100 * |(x_{true} - x_{imp})/x_{true}|$
+  
+  where
+    $x_{true}$ the true value from the data matrix and $x_{imp}$ the imputed value from the data matrix
+  
+  *For good performance we expect values to be concentrated close to zero.*
+
+##### For Discrete Features:
+
+* **Confusion Matrix** : count the number of *True Positives*, *False Negatives*, *False Positives* and *True Negatives* and store them in a matrix to assess performance of predictor.
+
+    *Good performance is indicated by higher counts in the diagonal of the matrix.*
+
+* **Accuracy** : sum the counts in the *diagonal* of the confusion matrix (True Positive and True Negative) and divide by the sum of all entries in the confusion matrix.
+
+    *Good performance leads to a value close to 1 and bad performance to a value around 0.*
+
+* **Proportion of falsely classified** (PFC) : sum the counts in the *off diagonal* of the confusion matrix (False Negative and False Positive) and divide by the sum of all entries in the confusion matrix.
+
+    *Good performance leads to a value close to 0 and bad performance to a value around 1.*
+
+##### Functions to Evaluate Performance Metrics (Python)
+
+``` {python messages = FALSE, eval = FALSE}
+
+def performance_results_py(true_df, imp_df, nans_df, columns):
+    """
+    Function to extract true values and imputed values and compute performance metrics.
+    :param true_df: pandas DataFrame containing true values
+    :param imp_df: pandas DataFrame containing imputed values
+    :param nans_df: pandas DataFrame containing nans
+    :param columns: columns containing imputed values
+    :return: list of results such that indexing returns results for each column (in columns) respectively
+             for each column you then have the output from performance_metrics() which depends on the data type
+    """
+
+    results = []
+    for column in columns:
+
+        # a. Extract boolean vector (True/False) to identify Imputed True Data Vectors
+        boolean_values = (true_df != nans_df)[column].to_numpy().tolist()
+        true_values = true_df[column][boolean_values]
+
+        # c. Extract Imputed Data Vectors
+        imputed_values = imp_df[column][boolean_values].to_numpy().tolist()
+
+        # d. Evaluate performance metrics
+        results.append(performance_metrics(imputed_values, true_values))
+
+    return(results)
+
+def performance_metrics(imputed_values, true_values):
+    """
+    Function to calculate all performance metrics of interest for each list of imputed vs true values.
+
+    :param imputed_values: list of imputed values
+    :param true_values: list of true values
+    :return: if categorical - measures of accuracy and the confusion matrix
+             if numerical - measures of raw difference and percentage difference between
+                            imputed value and true value
+             
+    Note: each list for now is specific to each column, as it supports univariate imputations.
+    Note: depending the on the methods used the columns are independent of each other,
+          e.g. the median imputation does not use any other column at all -
+          implying that we can assess performance independently of one another.
+    """
+
+    # If Categorical Feature
+    if isinstance(imputed_values[0], str):
+
+        # Confusion Matrix
+        conf_matrix = metrics.confusion_matrix(true_values, imputed_values)
+
+        # Accuracy
+        accuracy = metrics.accuracy_score(true_values, imputed_values)
+
+        # Precision
+        # precision = metrics.precision_score(true_values, imputed_values)
+        # todo: fix - precision not working as it requires a 'positive' label, it could work better if I encoded the categories
+
+        return(conf_matrix, accuracy)
+
+    # If Numerical Feature
+    elif isinstance(imputed_values[0], float):
+
+        # 1. The difference between the imputed value and truth
+        D = np.array(imputed_values) - np.array(true_values)
+        sample_mean = np.mean(D)
+        sample_sd = np.sqrt(np.var(D))
+
+        #    Plot
+        ci = norm(*norm.fit(D)).interval(0.95)
+        height, bins, patches = plt.hist(D, alpha = 0.3)
+        plt.fill_betweenx([0, height.max()], ci[0], ci[1], color = 'g', edgecolor = 'white', alpha = 0.1)
+        
+        # 2. The percentage difference between the imputed value and truth
+        PD = 100 * abs((np.array(imputed_values) - np.array(true_values))/np.array(true_values))
+
+        return(D, PD, sample_mean, sample_sd)
+
+    else:
+
+        return(None)
+        
+        
+```
+
+##### Function to Evaluate Performance Metrics (R)
+
+*Not finished*: need to include missForest and continuous cases
+
+``` {r message = FALSE}
+
+library(caret) # for confusion matrix
+
+## FUNCTION
+#  Function to extract true values and imputed values and compute performance metrics.
+## INPUTS
+#  true_df: data.frame containing true values
+#  imp_df: output directly from methods `mice()` or `missForest()`
+#  columns: vector input containing strings representing column names which contain imputed values
+#  method: string input 'mice' or 'missforest'
+## OUTPUT
+#  list containing:
+#    if categorical - measures of accuracy and the confusion matrix
+#    if numerical - measures of raw difference and percentage difference between
+#                   imputed value and true value
+performance_results_r <- function(true_df, imp_df, columns, method) {
+  
+  if (method == 'mice') {
+    
+    # set up
+    m <- ncol(imp_df$imp[[columns[1]]])
+
+    # empty storage
+    conf_matrix <- list()
+    accuracy <- list()
+    
+    for (column in columns) {
+      
+      # extract true values
+      imp_rows <- row.names(imp_df$imp[[column]])
+      truth <- data.frame(true_df[[column]])[imp_rows, ]
+      
+      accuracies <- c()
+      for (i in 1:m) {
+        
+        # extract imputed values
+        pred <- imp_df$imp[[column]][[i]]
+        
+        # - - - 
+        # TODO: add an if statement here for the continuous case 
+        
+        # compute performance 
+        analysis_table <- table(pred, truth)
+        res <- confusionMatrix(analysis_table)
+        accuracies <- c(accuracies, res$overall[1])
+        # - - - 
+        
+      }
+      
+      # store results
+      conf_matrix[[column]] <- res$table
+      accuracy[[column]] <- mean(accuracies)
+    }
+    
+  }
+  
+  return(list("Accuracy Scores" = accuracy,
+              "Confusion Matrix" = conf_matrix))
+}
+
+```
+
+**Notes / Things to consider**:
+
+* Overfitting can be identified by checking validation metrics such as accuracy and loss. The validation metrics usually increase until a point where they stagnate or start declining when the model is affected by overfitting. During an upward trend, the model seeks a good fit, which, when achieved, causes the trend to start declining or stagnate.
+
+* Need to have a performance metric that tells us something about the relationship of the data being preserved?
+
+----
+
+# Anything that follows is unfinished / drafts / to edit
+
+### 4. Bringing it all together [Running the Code]
+
+##### Function for running the whole code 
+
+``` {python echo = FALSE, eval = FALSE}
+
+def imputation_complete(complete_df, columns, percentage):
+    """
+    Function which brings together all the functions for a single step of the simulation study.
+    These consists of:
+    1. randomly dropping values from the dataset,
+    2. fitting imputation methods, and
+    3. evaluating the performance of the imputed data against the true data.
+
+    :param df: pandas DataFrame which is the full data
+    :param columns: list of columns to 'drop' values from. Note: must be string name of columns
+    :param percentage: float input such as 0.20 (i.e. 20%)
+    :return: results for each of the methods (currently only missforest and median imputer)
+    """
+
+    ##### COMPLETE CODE:
+
+    ### 1. DROP VALUES RANDOMLY
+
+    df_nans = remove_random_values(complete_df.copy(), columns, percentage)
+
+    ### 2. COMPUTE METHODS
+
+    median_imputed_data, missforest_imputed_data = univariate_imputation_methods(df_nans[columns])
+
+    ### 3. EXTRACT TRUE VALUES AND COMPARE WITH IMPUTED VALUES
+
+    results_median = []
+    results_missforest = []
+    for column in columns:
+
+        # a. Extract boolean vector (True/False) to identify Imputed True Data Vectors
+        boolean_values = (original_df != df_nans)[column].to_numpy().tolist()
+        true_values = original_df[column][boolean_values]
+
+        # c. Extract Imputed Data Vectors
+        imputed_values_median = median_imputed_data[column][boolean_values].to_numpy().tolist()
+        imputed_values_missforest = missforest_imputed_data[column][boolean_values].to_numpy().tolist()
+
+        # d. Evaluate performance metrics
+        results_median.append(performance_metrics(imputed_values_median, true_values))
+        results_missforest.append(performance_metrics(imputed_values_missforest, true_values))
+
+    return(results_median, results_missforest)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+``` {r messages = FALSE, echo = FALSE, eval = FALSE}
+
+library(caret) # for confusion matrix
+library(mice) # for imputation methods
+
+### MICE FITTING
+
+results <- mice(nans_df[c('cat0', 'cat1', 'cont0')], m = 5, maxit = 5)
+
+## PERFORMANCE ANALYSIS:
+
+# performance_results_r <- function()
+
+m <- 5
+columns <- c('cat0', 'cat1')
+conf_matrix <- list()
+accuracy <- list()
+
+for (column in columns) {
+  imp_rows <- row.names(results$imp[[column]])
+  truth <- data.frame(true_df[[column]])[imp_rows, ]
+  
+  accuracies <- c()
+  for (i in 1:m) {
+    pred <- results$imp[[column]][[i]]
+    
+    analysis_table <- table(pred, truth)
+    res <- confusionMatrix(analysis_table)
+    accuracies <- c(accuracies, res$overall[1])
+    
+  }
+  
+  conf_matrix[[column]] <- res$table
+  accuracy[[column]] <- mean(accuracies)
+  
+}
+
+cat("Accuracy Scores :", accuracy$cat0, accuracy$cat1)
+print(conf_matrix$cat0)
+print(conf_matrix$cat1)
+
+### NOTE: the following if run return collinearity issue
+# mice(nans_df[list_cat]) 
+# mice(nans_df[list_cont]) 
+
+```
+
+
+
+
+``` {r messages = FALSE, echo = FALSE, eval = FALSE}
+
+### MISSFOREST FITTING
+
+# note : cannot run on categorical variables with more than 53 factors
+# drop cat10 and cat8 and cat5
+
+remove <- c('cat5', 'cat8', 'cat10')
+
+# imp_df <- missForest(nans_df[list_comp[! list_comp %in% remove]])$ximp
+# mixError(imp_df, nans_df[list_comp[! list_comp %in% remove]], true_df[list_comp[! list_comp %in% remove]])
+
+imp_df <- missForest(nans_df[c('cat0', 'cat1', 'cont0')])$ximp
+mixError(imp_df, nans_df[c('cat0', 'cat1', 'cont0')], true_df[c('cat0', 'cat1', 'cont0')])
+
+## The final results can be accessed directly. The estimated error:
+# res$OOBerror
+## The true imputation error (if available):
+# res$error
+## And of course the imputed data matrix (do not run this):
+# res$Ximp
+
+
+# nans_df <- prodNA(true_df, 0.2)
+# missForest(nans_df, xtrue = true_df, verbose = TRUE)
+
+```
+
+
+

@@ -10,7 +10,7 @@ import sys as sys
 # for modelling
 import sklearn.neighbors._base
 sys.modules['sklearn.neighbors.base'] = sklearn.neighbors._base
-from missingpy import MissForest
+# from missingpy import MissForest
 from sklearn.impute import KNNImputer
 from sklearn.impute import SimpleImputer
 
@@ -23,7 +23,7 @@ import time
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ### FUNCTION TO REMOVE DATA
 
-def remove_random_values(df, columns, percentage):
+def remove_random_values(true_df, columns, percentage):
     """
     Funtion the will remove values from the selected columns at random,
     then replace the removed values with np.nan which is NaN.
@@ -38,14 +38,14 @@ def remove_random_values(df, columns, percentage):
     :param df: pandas DataFrame which is the full data
     :param columns: list of columns to 'drop' values from. Note: must be string name of columns
     :param percentage: float input such as 0.20 (i.e. 20%)
-    :return: DataFrame with NaN entries
+    :return: pandas DataFrame of the same shape as the original with NaN entries
     """
 
     start = time.time()
     # Set up: Focus on subset of data dependent on columns,
     #         hence extract information about subset and number of values to drop
-    subset = df[columns].copy()
-    nrow, ncol = df[columns].shape
+    subset = true_df[columns].copy()
+    nrow, ncol = true_df[columns].shape
     n_samples = int(percentage*nrow)
 
     # 1. Pick out a vector of random samples (row indexes)
@@ -69,27 +69,25 @@ def remove_random_values(df, columns, percentage):
     # e.g. the vectorised version subset.loc[sampled_row_indexes, sampled_columns] = np.nan is too expensive
 
     # 4. Update data frame with new NaN values
-    df.update(subset)
-    df = df.replace('nan', np.nan)
-    df = df.replace(-1, np.nan)
+    true_df.update(subset)
+    true_df = true_df.replace('nan', np.nan)
+    true_df = true_df.replace(-1, np.nan)
 
     end = time.time()
     print("Random Sampling Complete - Time Elapsed : ", end - start)
 
-    return(df)
+    return(true_df)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ### FUNCTION TO RUN MODELS
 
 # todo: still does not support discrete
 
-def univariate_imputation_methods(df):
+def univariate_imputation_methods(nans_df):
     """
     Function which runs through our chosen three methods: Median Imputation, MissForest and KNNImputer.
 
-    :param df: dataframe which has missing data - subset on the columns to impute only
-    :param complete_df: dataframe which has the complete data
-    :param columns: list of columns strings used in the remove_random_values() function.
+    :param nans_df: dataframe which has missing data - subset on the columns to impute only
     :return: the three imputed datasets (for now)
     """
 
@@ -100,7 +98,7 @@ def univariate_imputation_methods(df):
     ### STRATEGY 1: MEDIAN IMPUTATION
 
     # Impute Data
-    median_imputation_data = df.copy()
+    median_imputation_data = nans_df.copy()
     median_imputer = SimpleImputer(strategy = "median")
     median_imputer.fit(median_imputation_data)
 
@@ -118,7 +116,7 @@ def univariate_imputation_methods(df):
 
     ### STRATEGY 2: MissForest
 
-    miss_forest_data = df.copy()
+    miss_forest_data = nans_df.copy()
 
     # Create imputation tactic.
     miss_forest_imputer = MissForest()
@@ -156,6 +154,55 @@ def univariate_imputation_methods(df):
     """
 
     return(median_imputation_data, miss_forest_data)
+
+# Version which does support discrete (but v simple)
+def univariate_imputation_method(nans_df, type):
+    """
+    Function which runs through our chosen three methods: Median Imputation, and Most Frequent Imputation
+
+    :param nans_df: pandas DataFrame which has missing data - subset on the columns to impute only
+    :param type: string input, 'cat' or 'cont' to specify appropriate imputation method to use
+    :return: the imputed dataset
+    """
+
+    start = time.time()
+
+    ##### DEPLOY METHODS:
+
+    # Impute Data
+    imputed_data = nans_df.copy()
+
+    if type == 'cont':
+
+      ### STRATEGY 1: MEDIAN IMPUTATION
+      median_imputer = SimpleImputer(strategy = "median")
+      median_imputer.fit(imputed_data)
+      raw_output = median_imputer.transform(imputed_data)
+
+      imputed_data = pd.DataFrame(raw_output,
+                                   columns = imputed_data.columns,
+                                   index = imputed_data.index)
+
+      end = time.time()
+
+      print("Median Imputation Complete - Time Elapsed :", end - start)
+
+    elif type == 'cat':
+
+      ### STRATEGY 2: MOST FREQUENT IMPUTATION
+      median_imputer = SimpleImputer(strategy = "most_frequent")
+      median_imputer.fit(imputed_data)
+      raw_output = median_imputer.transform(imputed_data)
+
+      imputed_data = pd.DataFrame(raw_output,
+                                   columns = imputed_data.columns,
+                                   index = imputed_data.index)
+
+      end = time.time()
+
+      print("Most Frequent Imputation Complete - Time Elapsed :", end - start)
+
+    return imputed_data
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ### PERFORMANCE METRICS FUNCTION
@@ -224,10 +271,35 @@ def performance_metrics(imputed_values, true_values):
 
         return(None)
 
+def performance_results(true_df, imp_df, nans_df, columns):
+    """
+    Function to extract true values and imputed values and compute performance metrics.
+    :param true_df:
+    :param imp_df:
+    :param nans_df:
+    :param columns:
+    :return:
+    """
+
+    results = []
+    for column in columns:
+
+        # a. Extract boolean vector (True/False) to identify Imputed True Data Vectors
+        boolean_values = (true_df != nans_df)[column].to_numpy().tolist()
+        true_values = true_df[column][boolean_values]
+
+        # c. Extract Imputed Data Vectors
+        imputed_values = imp_df[column][boolean_values].to_numpy().tolist()
+
+        # d. Evaluate performance metrics
+        results.append(performance_metrics(imputed_values, true_values))
+
+    return(results)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ### SIMULATION STUDY FUNCTION
 
-def imputation_complete(complete_df, columns, percentage):
+def imputation_complete(true_df, columns, percentage):
     """
     Function which brings together all the functions for a single step of the simulation study.
     These consists of:
@@ -245,7 +317,7 @@ def imputation_complete(complete_df, columns, percentage):
 
     ### 1. DROP VALUES RANDOMLY
 
-    df_nans = remove_random_values(complete_df.copy(), columns, percentage)
+    df_nans = remove_random_values(true_df.copy(), columns, percentage)
 
     ### 2. COMPUTE METHODS
 
@@ -258,17 +330,14 @@ def imputation_complete(complete_df, columns, percentage):
     for column in columns:
 
         # a. Extract boolean vector (True/False) to identify Imputed True Data Vectors
-        boolean_values = (original_df != df_nans)[column].to_numpy().tolist()
-        values = original_df[column][boolean_values]
+        boolean_values = (true_df != df_nans)[column].to_numpy().tolist()
+        true_values = true_df[column][boolean_values]
 
-        # b. Store away true value and boolean vector
-        true_values = values
-
-        # c. Extract Imputed Data Vectors
+        # b. Extract Imputed Data Vectors
         imputed_values_median = median_imputed_data[column][boolean_values].to_numpy().tolist()
         imputed_values_missforest = missforest_imputed_data[column][boolean_values].to_numpy().tolist()
 
-        # d. Evaluate performance metrics
+        # c. Evaluate performance metrics
         results_median.append(performance_metrics(imputed_values_median, true_values))
         results_missforest.append(performance_metrics(imputed_values_missforest, true_values))
 
@@ -276,16 +345,17 @@ def imputation_complete(complete_df, columns, percentage):
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ### DEMO : RUN THE WHOLE THING
+"""
 
 # Import Data
-original_df = pd.read_csv("data/train.csv")
-original_df.head(6)
+true_df = pd.read_csv("Imputation/data/train.csv")
+true_df.head(6)
 
 ### 1. CONTINUOUS CASE WITH 20% of TOTAL DATA
 
 start = time.time()
 
-results_median, results_missforest = imputation_complete(complete_df = original_df, columns = ['cont5', 'cont8'], percentage = 0.2)
+results_median, results_missforest = imputation_complete(true_df = true_df, columns = ['cont5', 'cont8'], percentage = 0.2)
 
 end = time.time()
 print("Full Run Completed - Time Elapsed :", end - start)
@@ -294,6 +364,14 @@ print("Full Run Completed - Time Elapsed :", end - start)
 
 ### 2. DISCRETE CASE ONLY WITH 20% of TOTAL DATA
 
+start = time.time()
+
+nans_df = remove_random_values(true_df.copy(), ['cat5', 'cat9'], 0.2)
+imp_df = univariate_imputation_method(nans_df[['cat5', 'cat9']], type = 'cat')
+res = performance_results(true_df, imp_df, nans_df, ['cat5', 'cat9'])
+
+end = time.time()
+print("Full Run Completed - Time Elapsed :", end - start)
 
 
-
+"""
