@@ -176,50 +176,39 @@ Univariate imputation methods chosen fall into some of the standard ideas which 
 
 ``` {python eval = FALSE}
 
-def univariate_imputation_method(nans_df, type):
+def univariate_imputation_method(nans_df):
     """
     Function which runs through our chosen three methods: Median Imputation, and Most Frequent Imputation
+    
+    Code from https://dzone.com/articles/imputing-missing-data-using-sklearn-simpleimputer helped remove errors
+    when imputing isolated columns alone. Was getting error 'expected 2D array and was provided with 1D array'
 
     :param nans_df: pandas DataFrame which has missing data - subset on the columns to impute only
-    :param type: string input, 'cat' or 'cont' to specify appropriate imputation method to use
     :return: the imputed dataset
     """
-
+    # Start time
     start = time.time()
 
-    ##### DEPLOY METHODS:
-
+    # Dataset that will be imputed and returned to main
     imputed_data = nans_df.copy()
 
-    if type == 'cont':
+    # Looping through each column that has to be imputed.
+    # Doing this tactic to capture name of column
+    for column in imputed_data:
+        # Checking if the column is categorical data type and using most frequent tactic
+        if column[0:3] == 'cat':
+            imputer_tactic = SimpleImputer(strategy = "most_frequent")
+        # Checking if the column is numerical data type and using mean tactic
+        else:
+            imputer_tactic = SimpleImputer(strategy = "mean")
+        
+        # Imputing the specific column with the appropriate specific tactic
+        imputed_data[column] = imputer_tactic.fit_transform(imputed_data[column].values.reshape(-1,1))[:,0]
 
-      ### STRATEGY 1: MEDIAN IMPUTATION
-      median_imputer = SimpleImputer(strategy = "median")
-      median_imputer.fit(imputed_data)
-      raw_output = median_imputer.transform(imputed_data)
 
-      imputed_data = pd.DataFrame(raw_output,
-                                   columns = imputed_data.columns,
-                                   index = imputed_data.index)
+    end = time.time()
 
-      end = time.time()
-
-      print("Median Imputation Complete - Time Elapsed :", end - start)
-
-    elif type == 'cat':
-
-      ### STRATEGY 2: MOST FREQUENT IMPUTATION
-      median_imputer = SimpleImputer(strategy = "most_frequent")
-      median_imputer.fit(imputed_data)
-      raw_output = median_imputer.transform(imputed_data)
-
-      imputed_data = pd.DataFrame(raw_output,
-                                   columns = imputed_data.columns,
-                                   index = imputed_data.index)
-
-      end = time.time()
-
-      print("Most Frequent Imputation Complete - Time Elapsed :", end - start)
+    print("Most Frequent Imputation Complete - Time Elapsed :", end - start)
 
     return imputed_data
 
@@ -235,22 +224,26 @@ For this analysis we focused on two key approaches.
    
     **Note** : both cope with mixed data well.
 
-``` {python messages = FALSE, eval = FALSE, echo = FALSE}
-
+``` {python messages = FALSE, eval = TRUE, echo = FALSE}
+# Correct data frame with true values
 true_df = pd.read_csv("data/train.csv")
-nans_df = remove_random_values(true_df.copy(), ['cat0', 'cat1'], 0.2)
-imp_df = univariate_imputation_method(nans_df[['cat0', 'cat1']], type = 'cat')
-res_col1, res_col2 = performance_results(true_df, imp_df, nans_df, ['cat0', 'cat1'])
+# Data frame with the random replacement of true values with NA cells
+nans_df = remove_random_values(true_df.copy(), ['cont0', 'cat0'], 0.2)
+# Predicted data frame with the imputed values for the NA's
+imp_df = univariate_imputation_method(nans_df[['cont0', 'cat0']])
+res_col1, res_col2 = performance_results(true_df, imp_df, nans_df, ['cont0', 'cat0'])
 
 # print("Accuracy Scores", res_col1[1], res_col2[1])
 
 # This is necessary due to bug in transformation of dataset from Python to R 
 nans_df = nans_df.replace(np.nan, 'NA')
+print(true_df)
+
 
 ```
 
-``` {r message = FALSE, eval = FALSE, echo = FALSE}
-
+``` {r message = FALSE, eval = TRUE, echo = FALSE}
+library(dplyr) # importin to use some functions to help wrangle data in appropriate structure.
 # - - - - 
 # 1. extract data
 true_df <- py$true_df
@@ -261,9 +254,33 @@ nans_df <- py$nans_df
 nans_df[nans_df == 'NA'] <- NA
 # summary(nans_df)
 
+# Converting the data into R data frames.
+true_df <- as.data.frame(true_df)
+nans_df <- as.data.frame(nans_df)
+
 # note: all character types must be changed to factor
-true_df <- as.data.frame(unclass(true_df))
-nans_df <- as.data.frame(unclass(nans_df))
+nans_df <- nans_df %>%
+  mutate_if(is.character, as.factor)
+
+true_df <- true_df %>%
+  mutate_if(is.character, as.factor)
+
+# note: all numeric that will be imputed must be unlisted.
+nans_df <- nans_df %>%
+  mutate(cont0 = unlist(cont0),
+         cont1 = unlist(cont1),
+         cont2 = unlist(cont2),
+         cont3 = unlist(cont3),
+         cont4 = unlist(cont4),
+         cont5 = unlist(cont5),
+         cont6 = unlist(cont6),
+         cont7 = unlist(cont7),
+         cont8 = unlist(cont8),
+         cont9 = unlist(cont9),
+         cont10 = unlist(cont10)
+         )
+
+
 # str(nans_df)
 
 # - - - - 
@@ -312,15 +329,15 @@ The **default methods used** are:
 * for unordered factor variables with more than two levels : `polyreg` - Bayesian Polytomous Regression
 * for continuous variables : `ppm` - Predictive Mean Matching
 
-``` {r messages = FALSE, eval = FALSE}
+``` {r messages = FALSE, eval = TRUE}
 
 ### MICE FITTING
 
 library(mice)
 
-columns_incl_predictors = c('cat0', 'cat1', 'cont0')
-imp_df <- mice(nans_df[columns_incl_predictors], m = 5, maxit = 5)
-
+columns_incl_predictors = c('cont0', 'cat0', 'cat1')
+# Placing a seed in the mice function for reproducible results. [For now]
+imp_df <- mice(nans_df[columns_incl_predictors], m = 3, maxit = 3, seed=5059)
 ```
 
 **Notes**;
@@ -337,13 +354,13 @@ imp_df <- mice(nans_df[columns_incl_predictors], m = 5, maxit = 5)
 
 *todo : add research on MissForest here - check out article linked as reference [3]*
 
-``` {r messages = FALSE, eval = FALSE}
+``` {r messages = FALSE, eval = TRUE}
 
 ### MISSFOREST FITTING
 
 library(missForest)
 
-imp_df <- missForest(nans_df[columns_incl_predictors])$ximp
+imp_df_forest <- missForest(nans_df[columns_incl_predictors])$ximp
 mixError(imp_df, nans_df[columns_incl_predictors], true_df[columns_incl_predictors])
 
 ```
@@ -420,13 +437,17 @@ def performance_results_py(true_df, imp_df, nans_df, columns):
     for column in columns:
 
         # a. Extract boolean vector (True/False) to identify Imputed True Data Vectors
+        # Expect different values in cell, because comparing true with the NaN removed.
         boolean_values = (true_df != nans_df)[column].to_numpy().tolist()
-        true_values = true_df[column][boolean_values]
-
+       
         # c. Extract Imputed Data Vectors
+        # Using Boolean Pointer list from above, extract true values
+        true_values = true_df[column][boolean_values]
+        # Using Boolean Pointer list from above, extract imputed values
         imputed_values = imp_df[column][boolean_values].to_numpy().tolist()
 
         # d. Evaluate performance metrics
+        # Call function the two columns and obtain metrics. 
         results.append(performance_metrics(imputed_values, true_values))
 
     return(results)
@@ -494,6 +515,7 @@ def performance_metrics(imputed_values, true_values):
 ``` {r message = FALSE}
 
 library(caret) # for confusion matrix
+library(matrixStats) # for calculating sd of multiple columns
 
 ## FUNCTION
 #  Function to extract true values and imputed values and compute performance metrics.
@@ -501,56 +523,65 @@ library(caret) # for confusion matrix
 #  true_df: data.frame containing true values
 #  imp_df: output directly from methods `mice()` or `missForest()`
 #  columns: vector input containing strings representing column names which contain imputed values
-#  method: string input 'mice' or 'missforest'
 ## OUTPUT
 #  list containing:
-#    if categorical - measures of accuracy and the confusion matrix
-#    if numerical - measures of raw difference and percentage difference between
+#    for categorical - measures of accuracy and the confusion matrix
+#    for numerical - measures of raw difference and percentage difference between
 #                   imputed value and true value
-performance_results_r <- function(true_df, imp_df, columns, method) {
-  
-  if (method == 'mice') {
+performance_results_mice <- function(true_df, imp_df, columns) {
     
-    # set up
-    m <- ncol(imp_df$imp[[columns[1]]])
+  # number_iterations : Number of iterations mice has done.
+  # Each iteration computes imputation valus
+  # We will find results from all values and get their average values.
+  number_iterations <- ncol(imp_df$imp[[columns[1]]])
 
-    # empty storage
-    conf_matrix <- list()
-    accuracy <- list()
+  
+  
+  # empty storages to fill with the metrics. [ALL metrics and can be indexed with $]
+  all_results <- list()
+
+  # For each column we imputed values we will found a metric.
+  for (column in columns) {
+  
+    # extract true values to compare with imputed.
+    imp_rows <- row.names(imp_df$imp[[column]])
+    truth <- data.frame(true_df[[column]])[imp_rows, ]
     
-    for (column in columns) {
-      
-      # extract true values
-      imp_rows <- row.names(imp_df$imp[[column]])
-      truth <- data.frame(true_df[[column]])[imp_rows, ]
-      
-      accuracies <- c()
-      for (i in 1:m) {
-        
-        # extract imputed values
+    accuracies <- c()
+    # Check if it is continuous or categorical values to apply appropriate computations.
+    if (startsWith(column, "cat")) {
+      for (i in 1:number_iterations) {
+        # extract imputed values for each iteration of mice.
         pred <- imp_df$imp[[column]][[i]]
-        
-        # - - - 
-        # TODO: add an if statement here for the continuous case 
-        
-        # compute performance 
+
         analysis_table <- table(pred, truth)
         res <- confusionMatrix(analysis_table)
         accuracies <- c(accuracies, res$overall[1])
         # - - - 
-        
       }
       
-      # store results
-      conf_matrix[[column]] <- res$table
-      accuracy[[column]] <- mean(accuracies)
+    # store results for each column.
+    all_results$conf_matrix[[column]] <- res$table
+    all_results$accuracy[[column]] <- mean(accuracies)
     }
-    
+    else {
+    # Subtracting the true - pred to get the difference from two vectors.
+    # Where equal we expect 0. If imputed overestimating +, IF imputed underestimating -.
+    # Result will be 3 columns, difference for each imputation run.
+    all_results$RB[[column]] <- truth - imp_df$imp[[column]][,]
+    all_results$PB[[column]] <- 100 * abs((truth - imp_df$imp[[column]][,]) / 100)
+    all_results$mean[[column]] <- colMeans(all_results$RB[[column]])
+    all_results$sd[[column]] <- colVars(as.matrix(all_results$RB[[column]]))
+      #  # - - - 
+    }
   }
   
-  return(list("Accuracy Scores" = accuracy,
-              "Confusion Matrix" = conf_matrix))
+  # Returning list that holds all values tha can be indexed with '$'
+  return(all_results)
+  
 }
+
+pp <- performance_results_mice(true_df, imp_df, c('cont0', 'cat0'))
 
 ```
 

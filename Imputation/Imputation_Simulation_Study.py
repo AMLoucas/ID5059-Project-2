@@ -8,10 +8,8 @@ import numpy as np
 import sys as sys
 
 # for modelling
-import sklearn.neighbors._base
-sys.modules['sklearn.neighbors.base'] = sklearn.neighbors._base
-# from missingpy import MissForest
-from sklearn.impute import KNNImputer
+#import sklearn.neighbors._base
+#sys.modules['sklearn.neighbors.base'] = sklearn.neighbors._base
 from sklearn.impute import SimpleImputer
 
 # for performance
@@ -81,126 +79,41 @@ def remove_random_values(true_df, columns, percentage):
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ### FUNCTION TO RUN MODELS
 
-# todo: still does not support discrete
 
-def univariate_imputation_methods(nans_df):
+### Univariate Simple Imputer that deals with continuous and discrete values.
+def univariate_imputation_method(nans_df):
     """
-    Function which runs through our chosen three methods: Median Imputation, MissForest and KNNImputer.
+    Function which runs through our chosen three methods: Median Imputation, and Most Frequent Imputation
+    
+    Code from https://dzone.com/articles/imputing-missing-data-using-sklearn-simpleimputer helped remove errors
+    when imputing isolated columns alone. Was getting error 'expected 2D array and was provided with 1D array'
 
-    :param nans_df: dataframe which has missing data - subset on the columns to impute only
-    :return: the three imputed datasets (for now)
+    :param nans_df: pandas DataFrame which has missing data - subset on the columns to impute only
+    :return: the imputed dataset
     """
-
+    # Start time
     start = time.time()
 
-    ##### DEPLOY METHODS:
+    # Dataset that will be imputed and returned to main
+    imputed_data = nans_df.copy()
 
-    ### STRATEGY 1: MEDIAN IMPUTATION
+    # Looping through each column that has to be imputed.
+    # Doing this tactic to capture name of column
+    for column in imputed_data:
+        # Checking if the column is categorical data type and using most frequent tactic
+        if column[0:3] == 'cat':
+            imputer_tactic = SimpleImputer(strategy = "most_frequent")
+        # Checking if the column is numerical data type and using mean tactic
+        else:
+            imputer_tactic = SimpleImputer(strategy = "mean")
+        
+        # Imputing the specific column with the appropriate specific tactic
+        imputed_data[column] = imputer_tactic.fit_transform(imputed_data[column].values.reshape(-1,1))[:,0]
 
-    # Impute Data
-    median_imputation_data = nans_df.copy()
-    median_imputer = SimpleImputer(strategy = "median")
-    median_imputer.fit(median_imputation_data)
-
-    # Once the data has been impute is outputs in an array
-    RawOutput = median_imputer.transform(median_imputation_data)
-
-    # We want to convert the array back to data frame now for further computations.
-    median_imputation_data = pd.DataFrame(RawOutput,
-                                     columns = median_imputation_data.columns,
-                                     index = median_imputation_data.index)
-
-    middle1 = time.time()
-
-    print("Median Imputation Complete - Time Elapsed :", middle1 - start)
-
-    ### STRATEGY 2: MissForest
-
-    miss_forest_data = nans_df.copy()
-
-    # Create imputation tactic.
-    miss_forest_imputer = MissForest()
-    # Once the data has been impute is outputs in an array
-    RawOutput = miss_forest_imputer.fit_transform(miss_forest_data)
-
-    # We want to convert the array back to data frame now for further computations.
-    miss_forest_data = pd.DataFrame(RawOutput,
-                                     columns = miss_forest_data.columns,
-                                     index = miss_forest_data.index)
-
-    middle2 = time.time()
-
-    print("MissForest Imputation Complete - Time Elapsed :", middle2 - start)
-
-    """
-    ### STRATEGY 3: KNNImputer
-
-    knn_imputer_data = df.copy()
-
-    # We can adjust hyperparameter n_neighbors.
-    knn_imputer = KNNImputer(n_neighbors = 2, weights = "uniform")
-
-    # Imputing values
-    RawOutput = knn_imputer.fit_transform(knn_imputer_data)
-
-    # We want to convert the array back to data frame now for further computations.
-    knn_imputer_data = pd.DataFrame(RawOutput,
-                                     columns = knn_imputer_data.columns,
-                                     index = knn_imputer_data.index)
 
     end = time.time()
 
-    print("KNN Imputation Complete - Time Elapsed :", end - middle2)
-    """
-
-    return(median_imputation_data, miss_forest_data)
-
-# Version which does support discrete (but v simple)
-def univariate_imputation_method(nans_df, type):
-    """
-    Function which runs through our chosen three methods: Median Imputation, and Most Frequent Imputation
-
-    :param nans_df: pandas DataFrame which has missing data - subset on the columns to impute only
-    :param type: string input, 'cat' or 'cont' to specify appropriate imputation method to use
-    :return: the imputed dataset
-    """
-
-    start = time.time()
-
-    ##### DEPLOY METHODS:
-
-    # Impute Data
-    imputed_data = nans_df.copy()
-
-    if type == 'cont':
-
-      ### STRATEGY 1: MEDIAN IMPUTATION
-      median_imputer = SimpleImputer(strategy = "median")
-      median_imputer.fit(imputed_data)
-      raw_output = median_imputer.transform(imputed_data)
-
-      imputed_data = pd.DataFrame(raw_output,
-                                   columns = imputed_data.columns,
-                                   index = imputed_data.index)
-
-      end = time.time()
-
-      print("Median Imputation Complete - Time Elapsed :", end - start)
-
-    elif type == 'cat':
-
-      ### STRATEGY 2: MOST FREQUENT IMPUTATION
-      median_imputer = SimpleImputer(strategy = "most_frequent")
-      median_imputer.fit(imputed_data)
-      raw_output = median_imputer.transform(imputed_data)
-
-      imputed_data = pd.DataFrame(raw_output,
-                                   columns = imputed_data.columns,
-                                   index = imputed_data.index)
-
-      end = time.time()
-
-      print("Most Frequent Imputation Complete - Time Elapsed :", end - start)
+    print("Most Frequent Imputation Complete - Time Elapsed :", end - start)
 
     return imputed_data
 
