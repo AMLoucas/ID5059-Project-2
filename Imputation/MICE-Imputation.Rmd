@@ -337,7 +337,7 @@ library(mice)
 
 columns_incl_predictors = c('cont0', 'cat0', 'cat1')
 # Placing a seed in the mice function for reproducible results. [For now]
-imp_df <- mice(nans_df[columns_incl_predictors], m = 3, maxit = 3, seed=5059)
+imp_df_mice <- mice(nans_df[columns_incl_predictors], m = 3, maxit = 3, seed=5059)
 ```
 
 **Notes**;
@@ -360,8 +360,10 @@ imp_df <- mice(nans_df[columns_incl_predictors], m = 3, maxit = 3, seed=5059)
 
 library(missForest)
 
+columns_incl_predictors = c('cont0', 'cat0', 'cat1')
 imp_df_forest <- missForest(nans_df[columns_incl_predictors])$ximp
-mixError(imp_df, nans_df[columns_incl_predictors], true_df[columns_incl_predictors])
+# We can use it but we actually calculating other measurements for the other 2 imputation techniques.
+#mixError(imp_df_forest, nans_df[columns_incl_predictors], true_df[columns_incl_predictors])
 
 ```
 
@@ -518,10 +520,10 @@ library(caret) # for confusion matrix
 library(matrixStats) # for calculating sd of multiple columns
 
 ## FUNCTION
-#  Function to extract true values and imputed values and compute performance metrics.
+#  Function to extract true values and imputed values and compute performance metrics for mice.
 ## INPUTS
 #  true_df: data.frame containing true values
-#  imp_df: output directly from methods `mice()` or `missForest()`
+#  imp_df: output directly from methods `mice()` 
 #  columns: vector input containing strings representing column names which contain imputed values
 ## OUTPUT
 #  list containing:
@@ -534,8 +536,6 @@ performance_results_mice <- function(true_df, imp_df, columns) {
   # Each iteration computes imputation valus
   # We will find results from all values and get their average values.
   number_iterations <- ncol(imp_df$imp[[columns[1]]])
-
-  
   
   # empty storages to fill with the metrics. [ALL metrics and can be indexed with $]
   all_results <- list()
@@ -581,7 +581,71 @@ performance_results_mice <- function(true_df, imp_df, columns) {
   
 }
 
-pp <- performance_results_mice(true_df, imp_df, c('cont0', 'cat0'))
+library(dplyr) # allows usage of '%>%', and helps find rows where NA's are placed.
+## FUNCTION
+#  Function to extract true values and imputed values and compute performance metrics for missForest.
+## INPUTS
+#  true_df: data.frame containing true values
+#  imp_df: output directly from methods `missForest().ximp`
+#  nans_df: data.frame which we randomly replaced true values with NA's
+#  columns: vector input containing strings representing column names which contain imputed values
+## OUTPUT
+#  list containing:
+#    for categorical - measures of accuracy and the confusion matrix
+#    for numerical - measures of raw difference and percentage difference between
+#  
+performance_results_missForest <- function(true_df, imp_df, nans_df, columns) {
+  
+  # empty storages to fill with the metrics. [ALL metrics and can be indexed with $]
+  all_results <- list()
+
+  # For each column we imputed values we will found a metric.
+  for (column in columns) {
+    
+    # extract true values to compare with imputed.
+    rows_imputed <- nans_df %>%
+      mutate(row_names = row.names(nans_df)) # Creating a row_id in data frame.
+    
+    # Keeps rows that have NA values in column only.
+    rows_imputed <- rows_imputed[is.na(rows_imputed[[column]]), ] 
+    
+    # Extract the cells for true and imputed values to compare between.
+    truth <- data.frame(true_df[[column]])[rows_imputed[["row_names"]], ]
+    pred <- data.frame(imp_df[[column]])[rows_imputed[["row_names"]], ]
+    
+  
+    
+    accuracies <- c()
+    # Check if it is continuous or categorical values to apply appropriate computations.
+    if (startsWith(column, "cat")) {
+
+      analysis_table <- table(pred, truth)
+      res <- confusionMatrix(analysis_table)
+      accuracies <- c(accuracies, res$overall[1])
+      # - - - 
+      
+      # store results for each column.
+      all_results$conf_matrix[[column]] <- res$table
+      all_results$accuracy[[column]] <- mean(accuracies)
+    }
+    else {
+    # Subtracting the true - pred to get the difference from two vectors.
+    # Where equal we expect 0. If imputed overestimating +, IF imputed underestimating -.
+    # Result will be 3 columns, difference for each imputation run.
+    all_results$RB[[column]] <- truth - pred
+    all_results$PB[[column]] <- 100 * abs((truth - pred) / 100)
+    all_results$mean[[column]] <- mean(all_results$RB[[column]])
+    all_results$sd[[column]] <- sd(as.matrix(all_results$RB[[column]]))
+      #  # - - - 
+    }
+  }
+  
+  # Returning list that holds all values tha can be indexed with '$'
+  return(all_results)
+  
+  }
+
+pp <- performance_results_missForest(true_df, imp_df_forest, nans_df, c('cont0', 'cat0'))
 
 ```
 
@@ -734,6 +798,7 @@ mixError(imp_df, nans_df[c('cat0', 'cat1', 'cont0')], true_df[c('cat0', 'cat1', 
 # missForest(nans_df, xtrue = true_df, verbose = TRUE)
 
 ```
+
 
 
 
