@@ -40,6 +40,8 @@ source_python("Imputation_Simulation_Study.py")
 
 [5 : Imputing Missing Data with R MICE Package](https://datascienceplus.com/imputing-missing-data-with-r-mice-package/)
 
+[6 : MissForest : Non-Parametric imputation technique](https://arxiv.org/pdf/1105.0828.pdf)
+
 ## Imputation
 
 > Imputation is the act of converting an incomplete sample into a complete sample. [1]
@@ -438,7 +440,26 @@ impute_using_mice <- function(nans_df, columns) {
 
 ##### MissForest Fitting and Function
 
-*todo : add research on MissForest here - check out article linked as reference [3]*
+The machine learning imputation method 'MissForest' follows an iterative lifecycle and is based on the 'Random Forest' predictive model. The specific algorithm does not fill missing cells with constants but with predictions. It predicts the missing values using a 'Random Forest' classification or regression model and the final predicted cell value is the average or the majority of predictions obtained.
+
+ * Average used when we filling numerical data types.
+ * Majority is used when we filling categorical data types.
+
+The steps and process of a MissForest lifecycle:
+
+ * Fill missing values using the mode ('most frequent') or mean of the column.
+ * Train a Random Forest model using a complete data set.
+ * Predict the missing values using the model trained above.
+ * Re-fit Random Forest with dataset filled with the previous predicts values rather than mean/mode
+ * Predict missing values again.
+ * The above process is done in an iterative fashion and stops according to the stopping technique used
+ 
+The MissForest imputation technique has outperformed other methods multiple times in different researches. Using the Random Forest models allows to take the advantage of out of bag sample evaluating technique, which does not need a test set. These techniques help and allow the algorithm to perform very well when the data follows a a complex non linear relation within it. However when it follows a linear relation, other models are preffered which are created to capture such relations. Another benefit of using the MissForest it that it considers the randomness of data and is computationally efficient, which allows to deal with data of high dimensions. In addition to, the imputation method can deal with categorical and numerical data types. When predicting a categorical data type,  classification tree models are used in the forest. On the other hand when predicting a numerical data type, regression tree models are used in the forest.
+
+The main benefit of using a MissForest model is that the algorithm is non-parametric. It does not assume any assumptions on the structural aspects of the data. This has no constraint of when a MissForest is appropriate, as it can deal with structured data and unstructured data. More on the MissForest algorithm can be found on reference [6] 
+
+
+We can apply the MissForest imputation method using R package 'missForest' provided for us.
 
 ``` {r messages = FALSE, eval = TRUE, warning=FALSE}
 ### FUNCTION
@@ -465,7 +486,7 @@ impute_using_missForest <- function(nans_df, columns) {
 
 **Notes**;
 
-* By construction of algorithm cannot run on categorical variables with more than 53 factors: drop cat10 and cat8 and cat5
+* By construction of algorithm cannot run on categorical variables with more than 53 factors: drop cat10 and cat8 and cat5. There are different techniques to deal with this phenomeno. We can apply a One v One Strategy but this would make the model more computationl expensive. Since we have many multiple variables, we choose to not include them in the Random Forest and use the rest. 
 
 ----
 
