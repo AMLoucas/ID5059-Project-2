@@ -184,7 +184,7 @@ def performance_metrics(imputed_values, true_values):
 
         return(None)
 
-def performance_results(true_df, imp_df, nans_df, columns):
+def performance_results_py(true_df, imp_df, nans_df, columns):
     """
     Function to extract true values and imputed values and compute performance metrics.
     :param true_df:
@@ -234,7 +234,7 @@ def imputation_complete(true_df, columns, percentage):
 
     ### 2. COMPUTE METHODS
 
-    median_imputed_data, missforest_imputed_data = univariate_imputation_methods(df_nans[columns])
+    median_imputed_data, missforest_imputed_data = univariate_imputation_method(df_nans[columns])
 
     ### 3. EXTRACT TRUE VALUES AND COMPARE WITH IMPUTED VALUES
 
