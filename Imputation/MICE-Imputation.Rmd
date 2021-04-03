@@ -349,7 +349,7 @@ impute_using_missForest <- function(nans_df, columns) {
   imp_df_forest <- missForest(nans_df[columns])$ximp
   
   end_time <- Sys.time()
-  print(paste("Time taken to impute using MICE is: ", (end_time - start_time)))
+  print(paste("Time taken to impute using missForest is: ", (end_time - start_time)))
   
   return(imp_df_forest)
   
@@ -705,6 +705,29 @@ wrangle_data_for_original <- function(true_df) {
 
 ```
 
+
+``` {r echo = FALSE, eval = TRUE, warning = FALSE}
+### FUNCTION
+# Its a function that will print the result metrics obtained for each simulation run
+# Its used to make code more compact and reproducible. Avoiding duplicate code
+## INPUTS
+# simulation: String indicating which simulation run the results are
+# columns: List holding the value of which columns were used.
+# simple: List holding the results involving Simple Imputer
+# mice: List holding the results involving Mice Imputer
+# forest: List holding the results involving the MissForest Imputer
+print_metrics_obtained <- function(simulation, columns, simple, mice, forest) {
+  
+  cat("For Simulation Run", simulation," the scores are: ", '\n',
+    "The mean difference for simple imputer", columns[[1]] ," :", simple[[1]]$mean," ", columns[[2]] ," :", simple[[2]]$mean, '\n',
+    "The mean difference for mice ", columns[[1]] ," :", mice$mean$cont0, " ", columns[[2]] ," :", mice$mean$cont1, '\n',
+    "The mean difference for missForest ", columns[[1]] ,":", forest$mean[[1]], " ", columns[[2]] ," :", forest$mean[[2]], '\n',
+    "The sd difference for simple imputer ", columns[[1]] ,":", simple[[1]]$sd, " ", columns[[2]] ," :", simple[[2]]$sd, '\n',
+    "The sd difference for mice ", columns[[1]] ," :", mice$sd$cont0, " ", columns[[2]] ," :", mice$sd$cont1, '\n',
+    "The sd difference for missForest ", columns[[1]] ," :", forest$sd[[1]], " ", columns[[2]] ," :", forest$sd[[2]] , '\n')
+}
+
+```
 ***
 
 ### 4. Bringing it all together
@@ -867,35 +890,156 @@ The final scores of the mean difference between true and predicted, as well as t
 ``` {r echo = FALSE, eval = TRUE, warning = FALSE}
 
 # Compare results final.
-cat("For Simulation Run One the scores are: ", '\n',
-    "The mean difference for simple imputer col1 :", simple_imputer_one_results[[1]]$mean, "col2 :", simple_imputer_one_results[[2]]$mean, '\n',
-    "The mean difference for mice col1 :", mice_result_one$mean$cont0, "col2 :", mice_result_one$mean$cont1, '\n',
-    "The mean difference for missForest col1 :", missForest_result_one$mean[[1]], "col2 :", missForest_result_one$mean[[2]], '\n',
-    "The sd difference for simple imputer col1 :", simple_imputer_one_results[[1]]$sd, "col2 :", simple_imputer_one_results[[2]]$sd, '\n',
-    "The sd difference for mice col1 :", mice_result_one$sd$cont0, "col2 :", mice_result_one$sd$cont1, '\n',
-    "The sd difference for missForest col1 :", missForest_result_one$sd[[1]], "col2 :", missForest_result_one$sd[[2]])
+print_metrics_obtained("One", column_one, simple_imputer_one_results, mice_result_one, missForest_result_one)
 
 ```
+
 
 ##### PLOTS
 
 ``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
-# Plotting some data example
+### FUNCTION
+## Function to plot density plots to comparing numeric column imputations
+## Input
+# simulation: String holding the number of simulation and covariate exploring
+# simple: List of all the D values for simple imputation
+# micee: List of all D values for mice imputation
+# forest: List of all D values for missForest imputations
+plot_density <- function(simulation, Simple, Mice, MissForest) {
+ 
+  # Must be <<data.frame>> not <<as.data.frame>> . Otherwise it does not create it correctly for some reason..
+  plotingData <- data.frame(Simple,
+                            Mice,
+                            MissForest)
+  
+  # Convert data to fit densities
+  # Imputation: column that will hold the old column names
+  # Difference: column that will hold all the Differences computed for all imputers
+  # Line under, columns we are gathering.
+  densPlotting <- plotingData %>%
+    gather(Imputation, Difference,
+           Mice, MissForest, Simple)
+  
+  # Giving appropriate title for graph.
+  title <- paste("Density Plot comparing techniques for Simulation", simulation)
+  
+  # Plotting the data using ggplot.
+  ggplot(densPlotting, aes(Difference, fill = Imputation, colour = Imputation)) + 
+    geom_density(alpha = 0.1) +
+    xlab("Difference of True-Imputed value in Smilatuon") + 
+    ylab("Density") + 
+    ggtitle(title) 
+}
 
-plot_col <- c(mice_result_one$D$cont0[[1]])
-plot_col_two <- c(missForest_result_one$D$cont0)
-xxPlot <- as.data.frame(plot_col, plot_col_two)
-#head(xxPlot)
+# Calling the funciton to plot the data.
+plot_density("One 'cont0'",
+             c(simple_imputer_one_results$cont0$D),
+             c(mice_result_one$D$cont0[[1]]),
+             c(missForest_result_one$D$cont0))
 
-ggplot(xxPlot, aes(x=plot_col)) + 
- geom_histogram()
+```
 
-ggplot(xxPlot, aes(x=plot_col_two)) + 
- geom_histogram()
+``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+### FUNCTION
+## Function to plot error plots to comparing numeric column imputations
+## Input
+# simulation: String holding the number of simulation and covariate exploring
+# means: List holding mean values for each imputation (simple, missForest, mice)
+# sds: List holding sd values for each imputation (simple, missForest, mice)
+# imputations: List holding the name imputations methods (simple, missForest, mice)
+plot_error <- function(simulation, means, sds, imputations) {
+  
+  # Creating the data frame for the plot.
+  error_data <- data.frame(means,
+                           sds,
+                           imputations)
+  
+  # Creating appropriate title for graph
+  title <- paste("Comparing CI of mean difference produces for Simulation", simulation)
+  
+  # Plotting the data
+  ggplot(error_data, aes(x = imputations, color = imputations)) +
+  geom_errorbar(aes(ymax = means + sds, ymin = means - sds), position = "dodge") +
+  xlab("Imputation Method") + 
+  ylab("Mean +/- 1SD of the raw difference") +
+  ggtitle(title)
+
+  
+}
+
+# Calling function to plot error bars (compare mean's and sd's)
+plot_error("One 'cont0'",
+           c(simple_imputer_one_results$cont0$mean, missForest_result_one$mean$cont0, mice_result_one$mean$cont0[[1]]),
+           c(simple_imputer_one_results$cont0$sd, missForest_result_one$sd$cont0, mice_result_one$sd$cont0[[1]]),
+           c("Simple", "MissForest", "Mice"))
+
 ```
 
 
+``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+####################
+# WILL BE INPUTTED IN FUNCTION
+###################
+### FUNCTION
+## Function to plot density plots to comparing numeric column imputations
+## Input
+# simulation: String holding the number of simulation and covariate exploring
+# simple: List of all the D values for simple imputation
+# micee: List of all D values for mice imputation
+# forest: List of all D values for missForest imputations
+plot_density_with_CI <- function(simulation, Simple, Mice, MissForest) {
+ 
+  # Must be <<data.frame>> not <<as.data.frame>> . Otherwise it does not create it correctly for some reason..
+  plotingData <- data.frame(Simple,
+                            Mice,
+                            MissForest)
+  
+  # Convert data to fit densities
+  # Imputation: column that will hold the old column names
+  # Difference: column that will hold all the Differences computed for all imputers
+  # Line under, columns we are gathering.
+  densPlotting <- plotingData %>%
+    gather(Imputation, Difference,
+           Mice, MissForest, Simple)
+  
+  # Giving appropriate title for graph.
+  title <- paste("Density Plot comparing techniques for Simulation", simulation)
+  
+  # Plotting the data using ggplot.
+  ggplot(densPlotting, aes(Difference, fill = Imputation, colour = Imputation)) + 
+    geom_density(alpha = 0.1) +
+    geom_segment(aes(x=mean(Difference) + 1.96*sd(Difference), xend=mean(Difference) + 1.96*sd(Difference),
+                     y=0, yend=3), alpha=0.5, lty="21") +
+    geom_segment(aes(x=mean(Difference) - 1.96*sd(Difference), xend=mean(Difference) - 1.96*sd(Difference),
+                     y=0, yend=3), alpha=0.5, lty="21") +
+    xlab("Difference of True-Imputed value in Smilatuon") + 
+    ylab("Density") + 
+    ggtitle(title) +
+    facet_wrap(~Imputation)
+}
+
+# Calling the funciton to plot the data.
+plot_density_with_CI("One 'cont0'",
+             c(simple_imputer_one_results$cont0$D),
+             c(mice_result_one$D$cont0[[1]]),
+             c(missForest_result_one$D$cont0))
+
+
+```
+
+
+
+
+
+
+
+
 ***
+
+
+
+
+
 
 ### Ignore for now
 
