@@ -21,6 +21,7 @@ All other requirements for this document:
 
 # For
 library(dplyr)         # Allows to use '%>%' and handy functions that help with data wrnagling.
+library(tidyr)         # Allows to use method 'gather()'
 
 # For Analysis
 library(missForest)    # For multivariate methods imputers
@@ -959,7 +960,7 @@ plot_error <- function(simulation, means, sds, imputations) {
   
   # Plotting the data
   ggplot(error_data, aes(x = imputations, color = imputations)) +
-  geom_errorbar(aes(ymax = means + sds, ymin = means - sds), position = "dodge") +
+  geom_errorbar(aes(ymax = means + 1.96*sds, ymin = means - 1.96*sds), position = "dodge") +
   xlab("Imputation Method") + 
   ylab("Mean +/- 1SD of the raw difference") +
   ggtitle(title)
@@ -985,7 +986,7 @@ plot_error("One 'cont0'",
 ## Input
 # simulation: String holding the number of simulation and covariate exploring
 # simple: List of all the D values for simple imputation
-# micee: List of all D values for mice imputation
+# mice: List of all D values for mice imputation
 # forest: List of all D values for missForest imputations
 plot_density_with_CI <- function(simulation, Simple, Mice, MissForest) {
  
@@ -1004,7 +1005,7 @@ plot_density_with_CI <- function(simulation, Simple, Mice, MissForest) {
   
   # Giving appropriate title for graph.
   title <- paste("Density Plot comparing techniques for Simulation", simulation)
-  
+
   # Plotting the data using ggplot.
   ggplot(densPlotting, aes(Difference, fill = Imputation, colour = Imputation)) + 
     geom_density(alpha = 0.1) +
@@ -1012,11 +1013,14 @@ plot_density_with_CI <- function(simulation, Simple, Mice, MissForest) {
                      y=0, yend=3), alpha=0.5, lty="21") +
     geom_segment(aes(x=mean(Difference) - 1.96*sd(Difference), xend=mean(Difference) - 1.96*sd(Difference),
                      y=0, yend=3), alpha=0.5, lty="21") +
+    #geom_text(aes(label = Imputation, y = 2)) +
     xlab("Difference of True-Imputed value in Smilatuon") + 
     ylab("Density") + 
     ggtitle(title) +
     facet_wrap(~Imputation)
 }
+
+
 
 # Calling the funciton to plot the data.
 plot_density_with_CI("One 'cont0'",
@@ -1027,7 +1031,80 @@ plot_density_with_CI("One 'cont0'",
 
 ```
 
+``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+####################
+# WILL BE INPUTTED IN FUNCTION
+###################
+### FUNCTION
+## Function to plot density plots to comparing numeric column imputations
+## Input
+# simulation: String holding the number of simulation and covariate exploring
+# simple: List of all the D values for simple imputation
+# mice: List of all D values for mice imputation
+# forest: List of all D values for missForest imputations
+plot_density_histogram <- function(simulation, Simple, Mice, MissForest) {
+ 
+  # Have to find lower and upper bounds for each metric.
+  lower_simple <- mean(Simple) - 1.96 * sd(Simple)
+  upper_simple <- mean(Simple) + 1.96 * sd(Simple)
+  
+  lower_mice <- mean(Mice) - 1.96 * sd(Mice)
+  upper_mice <- mean(Mice) + 1.96 * sd(Mice)
+  
+  lower_forest <- mean(MissForest) - 1.96 * sd(MissForest)
+  upper_forest <- mean(MissForest) + 1.96 * sd(MissForest)
+  
+  
+  # Keeping Differences contained in the CI of each imputation.
+  forest_CI <- MissForest[MissForest > lower_forest]
+  forest_CI <- MissForest[MissForest < upper_forest]
+  
+  mice_CI <- Mice[Mice > lower_mice]
+  mice_CI <- Mice[Mice < upper_mice]
+  
+  simple_CI <- Simple[Simple > lower_simple]
+  simple_CI <- Simple[Simple < upper_simple]
+  
+  N_observ <- c(length(simple_CI),
+                length(mice_CI),
+                length(forest_CI))
+  
+  # Finding proportion that fall in CI
+  percentage <- c(length(simple_CI) / length(Simple) * 100,
+                length(mice_CI) / length(Mice) * 100,
+                length(forest_CI) / length(MissForest) * 100)
+  # Putting values in data frame to compare
+  Imputation <- c("Simple", "Mice", "MissForest")
+  compareData <- data.frame(N_observ,
+                            Imputation)
+  
+  # Giving appropriate title for graph.
+  title <- paste("Number of Observation obtained in 95% CI", simulation)
+  
+  
+  # Plotting Data in Histogram
+  ggplot(compareData, aes(x = Imputation, y = N_observ)) +
+    geom_bar(stat = "identity", aes(fill = Imputation, colour = Imputation)) +
+    geom_text(label = paste(round(percentage, digits=2), "%"),
+              hjust = 1.5, size = 5, position = position_dodge(width = .75)) +
+    coord_flip() + 
+    xlab("Imputation Technique") + 
+    ylab("Number of Observations in 95% CI") + 
+    ggtitle(title) 
+  
+  
+}
 
+
+
+# Calling the funciton to plot the data.
+plot_density_histogram("One 'cont0'",
+             c(simple_imputer_one_results$cont0$D),
+             c(mice_result_one$D$cont0[[1]]),
+             c(missForest_result_one$D$cont0))
+
+
+```
 
 
 
