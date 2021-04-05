@@ -960,7 +960,8 @@ plot_error <- function(simulation, means, sds, imputations) {
   
   # Plotting the data
   ggplot(error_data, aes(x = imputations, color = imputations)) +
-  geom_errorbar(aes(ymax = means + 1.96*sds, ymin = means - 1.96*sds), position = "dodge") +
+  geom_errorbar(aes(ymax = (means + sds), 
+                    ymin =(means - sds)), position = "dodge") +
   xlab("Imputation Method") + 
   ylab("Mean +/- 1SD of the raw difference") +
   ggtitle(title)
@@ -978,56 +979,49 @@ plot_error("One 'cont0'",
 
 
 ``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
-####################
-# WILL BE INPUTTED IN FUNCTION
-###################
-### FUNCTION
-## Function to plot density plots to comparing numeric column imputations
-## Input
-# simulation: String holding the number of simulation and covariate exploring
-# simple: List of all the D values for simple imputation
-# mice: List of all D values for mice imputation
-# forest: List of all D values for missForest imputations
-plot_density_with_CI <- function(simulation, Simple, Mice, MissForest) {
- 
-  # Must be <<data.frame>> not <<as.data.frame>> . Otherwise it does not create it correctly for some reason..
-  plotingData <- data.frame(Simple,
-                            Mice,
-                            MissForest)
-  
+actual_plot <- function(title, dataPlot) {
+    # Giving appropriate title for graph.
+  title <- paste(title)
+  # Plotting the data using ggplot.
+  ggplot(dataPlot, aes(Difference, fill = Imputation, colour = Imputation)) + 
+    geom_density(alpha = 0.1) +
+    geom_segment(aes(x=(mean(Difference) + 1.96*sd(Difference)),
+                     xend=(mean(Difference) + 1.96*sd(Difference)),
+                     y=0, yend=3), alpha=0.5, lty="21") +
+    geom_segment(aes(x=(mean(Difference) - 1.96*sd(Difference)),
+                     xend=(mean(Difference) - 1.96*sd(Difference)),
+                     y=0, yend=3), alpha=0.5, lty="21") +
+    xlab("Difference of True-Imputed value in Smilatuon") + 
+    ylab("Density") + 
+    ggtitle(title) 
+}
+
+MissForest <-c(missForest_result_one$D$cont0)
+plotingData <- data.frame(MissForest)
   # Convert data to fit densities
   # Imputation: column that will hold the old column names
   # Difference: column that will hold all the Differences computed for all imputers
   # Line under, columns we are gathering.
-  densPlotting <- plotingData %>%
-    gather(Imputation, Difference,
-           Mice, MissForest, Simple)
+plotingData <- plotingData %>%
+  gather(Imputation, Difference,
+          MissForest)
+actual_plot(paste("MissForest Imputation CI with density for Simulation One"), plotingData)
+
+Mice <- c(mice_result_one$D$cont0[[1]])
+plotingData <- data.frame(Mice)
+plotingData <- plotingData %>%
+  gather(Imputation, Difference,
+         Mice)
+actual_plot(paste("Mice Imputation CI with density for Simulation One"), plotingData)
   
-  # Giving appropriate title for graph.
-  title <- paste("Density Plot comparing techniques for Simulation", simulation)
+Simple <- c(simple_imputer_one_results$cont0$D)
+plotingData <- data.frame(Simple)
+plotingData <- plotingData %>%
+  gather(Imputation, Difference,
+         Simple)
+actual_plot(paste("Simple Imputation CI with density for Simulation One"), plotingData)
 
-  # Plotting the data using ggplot.
-  ggplot(densPlotting, aes(Difference, fill = Imputation, colour = Imputation)) + 
-    geom_density(alpha = 0.1) +
-    geom_segment(aes(x=mean(Difference) + 1.96*sd(Difference), xend=mean(Difference) + 1.96*sd(Difference),
-                     y=0, yend=3), alpha=0.5, lty="21") +
-    geom_segment(aes(x=mean(Difference) - 1.96*sd(Difference), xend=mean(Difference) - 1.96*sd(Difference),
-                     y=0, yend=3), alpha=0.5, lty="21") +
-    #geom_text(aes(label = Imputation, y = 2)) +
-    xlab("Difference of True-Imputed value in Smilatuon") + 
-    ylab("Density") + 
-    ggtitle(title) +
-    facet_wrap(~Imputation)
-}
-
-
-
-# Calling the funciton to plot the data.
-plot_density_with_CI("One 'cont0'",
-             c(simple_imputer_one_results$cont0$D),
-             c(mice_result_one$D$cont0[[1]]),
-             c(missForest_result_one$D$cont0))
-
+rm(list = c("Simple", "Mice", "MissForest", "plotingData"))
 
 ```
 
@@ -1076,7 +1070,8 @@ plot_density_histogram <- function(simulation, Simple, Mice, MissForest) {
   # Putting values in data frame to compare
   Imputation <- c("Simple", "Mice", "MissForest")
   compareData <- data.frame(N_observ,
-                            Imputation)
+                            Imputation,
+                            percentage)
   
   # Giving appropriate title for graph.
   title <- paste("Number of Observation obtained in 95% CI", simulation)
@@ -1108,8 +1103,54 @@ plot_density_histogram("One 'cont0'",
 
 
 
+``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+####################
+# TESTER TO FIX ERRORS IN ONE PLOT.
+###################
+
+plot_density_with_CI <- function(simulation, Simple, Mice, MissForest) {
+ 
+  # Must be <<data.frame>> not <<as.data.frame>> . Otherwise it does not create it correctly for some reason..
+  plotingData <- data.frame(Simple,
+                            Mice,
+                            MissForest)
+  
+  # Convert data to fit densities
+  # Imputation: column that will hold the old column names
+  # Difference: column that will hold all the Differences computed for all imputers
+  # Line under, columns we are gathering.
+  densPlotting <- plotingData %>%
+    gather(Imputation, Difference,
+           Simple, Mice, MissForest)
+  
+  
+  # Giving appropriate title for graph.
+  title <- paste("Density Plot comparing techniques for Simulation", simulation)
+
+  # Plotting the data using ggplot.
+  ggplot(densPlotting, aes(Difference, fill = Imputation, colour = Imputation)) + 
+    geom_density(alpha = 0.1) +
+    geom_segment(aes(x=mean(Difference) + 1.96*sd(Difference), xend=mean(Difference) + 1.96*sd(Difference),
+                     y=0, yend=3), alpha=0.5, lty="21") +
+    geom_segment(aes(x=mean(Difference) - 1.96*sd(Difference), xend=mean(Difference) - 1.96*sd(Difference),
+                     y=0, yend=3), alpha=0.5, lty="21") +
+   #  geom_text(data = compareData, aes( y = 2, label = paste(N_observ)), check_overlap = TRUE) +
+    xlab("Difference of True-Imputed value in Smilatuon") + 
+    ylab("Density") + 
+    ggtitle(title) +
+    facet_wrap(~Imputation)
+}
 
 
+
+# Calling the funciton to plot the data.
+plot_density_with_CI("One 'cont0'",
+             c(simple_imputer_one_results$cont0$D),
+             c(mice_result_one$D$cont0[[1]]),
+             c(missForest_result_one$D$cont0))
+
+
+```
 
 ***
 
