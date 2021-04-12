@@ -1,6 +1,8 @@
 ---
 title: "ID5059 - Imputation"
 output:
+  html_document:
+    df_print: paged
   pdf_document:
     latex_engine: xelatex
 ---
@@ -12,19 +14,22 @@ The `reticulate` library (2020) enables us to use both Python and R functions an
 
 More information on the library specifications and functionalities can be found [here](https://rstudio.github.io/reticulate/)
 
-Source all functions from the python script `Imputation_Simulation_Study()`
-
-``` {r, setup, echo = FALSE, message = FALSE, warning=FALSE}
+``` {r, setup, echo = TRUE, message = FALSE, warning=FALSE}
 
 library(reticulate) # Allowing to use Python code in RMarkwdown.
 
+```
+
+``` {r, echo = FALSE, message = FALSE, warning=FALSE}
+
+# Source all functions from the python script `Imputation_Simulation_Study()`, the relevant functions are shown in the markdown below as well.
 source_python("Imputation_Simulation_Study.py") # Importing python functions used in final simulation.
 
 ```
 
 All other requirements for this document:
 
-``` {r echo = FALSE, message = FALSE, warning=FALSE}
+``` {r echo = TRUE, message = FALSE, warning=FALSE}
 
 # For general use
 library(dplyr)         # Allows to use '%>%' and handy functions that help with data wrnagling.
@@ -41,6 +46,8 @@ library(matrixStats)   # For calculating sd of multiple columns
 ```
 
 ---
+
+# Conducting Simulation Study of Imputation Methods
 
 ## References
 
@@ -92,11 +99,6 @@ For this special case, the simulation step is slightly unusual. Normally one wou
 1. For the **MCAR** Case:
 
   Mathematically, let $n$ be the total number of observations (rows) in the dataset and $m$ be the total number of features (columns) in the dataset. Hence, let $U_1$ and $U_2$ be two sets $U_1 \in {1,...,n} \text{  and } U_2 \in {1,...,m}$. By sampling with replacement k times from these two sets independently, such that any outcome is equally likely, the resulting ordered outcomes indicate the indexing of the element which will be dropped. These indexes can be viewed as the tuples $(u_1{_i}, u_2{_i}) \text{  for  } i \in {1,...,k}$.
-  
-2. For the **MAR** Case:
-
-  *Maybe to do??? could add an input to the simulation function() like data_type where it can take values "MCAR" or "MAR"*
-  *Could be interesting to see if MICE methods perform better when there is actually an underlying relationship which drives the presence of the missing data, i.e. their assumption is met*
 
 ##### Function to Remove Data (in Python)
 
@@ -473,9 +475,9 @@ def performance_metrics(imputed_values, true_values):
         PD = 100 * abs((np.array(imputed_values) - np.array(true_values))/np.array(true_values))
         
         # 3. Normalised Root Mean Squared Error
-        RMSE = sqrt(mean_squared_error(true_values, imputed_values)/np.var(true_values))
+        NRMSE = sqrt(mean_squared_error(true_values, imputed_values)/np.var(true_values))
 
-        return(D, PD, sample_mean, sample_sd, RMSE)
+        return(D, PD, sample_mean, sample_sd, NRMSE)
 
     else:
 
@@ -894,7 +896,7 @@ for (combination in combinations) {
 
 * **Choose a relevant set of percentages of data that should be dropped**: this is part of the set up of the simulation study and here we are exploring three cases $\text{\{}0.1, 0.2, 0.3\text{\}}$.
 
-``` {r echo = TRUE, message = FALSE}
+``` {r echo = TRUE, eval = FALSE, message = FALSE}
 
 percentage_drop <- list("large" = 0.3, "medium" = 0.2, "small" = 0.1)
 
@@ -902,7 +904,7 @@ percentage_drop <- list("large" = 0.3, "medium" = 0.2, "small" = 0.1)
 
 * **Choose a subset of the data**: this is due to the computational expense of the runs complessively. In order to be able to run more scenarios in a local machine, we chose to take a subset of the data. This tradeoff was necessary due to the lack of access to a desktop computer and being unable to run this code overnight.
 
-``` {r}
+``` {r eval = FALSE}
 
 original_df <- original_df[0:100000, ]
 
@@ -912,7 +914,7 @@ Then, run the full simulation.
 
 #### Third, full run.
 
-``` {r echo = TRUE, message = FALSE, warning = FALSE}
+``` {r eval = FALSE, echo = TRUE, message = FALSE, warning = FALSE}
 
 final_results <- mean_diff_results <- c()
 
@@ -1005,31 +1007,9 @@ system.time(for (columns in columns_combinations) {
 
 ```
 
-A snapshot of the results:
-
-**NRMSE** : *results sorted from best to worst*
-
-``` {r echo = TRUE, message = FALSE}
-
-subset <- final_results[final_results$performance_type == 'nrmse', ]
-head(subset[order(subset$performance, decreasing = FALSE), c("performance", "performance_type", "model", "type", "% drop")], 15)
-
-```
-
-**Accuracy** : *results sorted from best to worst*
-
-``` {r echo = TRUE, message = FALSE}
-
-subset <- final_results[final_results$performance_type == 'accuracy', ]
-head(subset[order(subset$performance, decreasing = TRUE), c("performance", "performance_type", "model", "type", "% drop")], 15)
-
-```
-
----
-
 Save results!
 
-``` {r echo = TRUE, message = FALSE}
+``` {r eval = FALSE, echo = TRUE, message = FALSE}
 
 saveRDS(final_results, file = "imputation_results.rds")
 saveRDS(mean_diff_results, file = "imputation_results_2.rds")
@@ -1038,21 +1018,210 @@ saveRDS(mean_diff_results, file = "imputation_results_2.rds")
 
 ---
 
-``` {r echo = FALSE}
+# Analysing Results of Imputation Methods Performance
 
-  # a) Include additional column(s) for prediction
-  # columns_predictions_if_cat <- cat_vec[!cat_vec %in% columns]
-  # columns_predictions_if_cont <- cont_vec[!cont_vec %in% columns]
-  # columns_predictions_if_both <- c(columns_predictions_if_cat, columns_predictions_if_cont)
+---
 
-  # b) Select appropriate case
-  if (startsWith(columns[1], "cat") & startsWith(columns[2], "cat")) {
-    pred_columns <- unique(c(columns, columns_predictions_if_cat))
-  } else if (startsWith(columns[1], "cont") & startsWith(columns[2], "cont")) {
-    pred_columns <- unique(c(columns, columns_predictions_if_cont))
-  } else { pred_columns <- unique(c(columns, columns_predictions_if_both)) }
+### Necessary Libraries
+
+``` {r, message = FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(RColorBrewer)
 
 ```
+
+### Read in results
+
+``` {r}
+
+model_performance <- readRDS("imputation_results.rds")
+mean_diff_estimates <- readRDS("imputation_results_2.rds")
+
+```
+
+***
+
+## Model Performance
+
+#### Take a look at the model performances output
+
+A snapshot of the results:
+
+Given a total output of 162 observations due to all the possible combinations, a snapshot of this dataframe can be seen below:
+
+``` {r}
+
+head(model_performance, 30)
+
+```
+
+The measures of model performance chosen have been the:
+
+* **Normalised Root Mean Squared Error** for the *Continuous Features*.
+
+  Recall, the formula for the NRMSE is $\sqrt{mean((X_{true} − X_{imp})^2)/var(X_{true})}$, where $X_{true}$ the complete data matrix and $X_{imp}$ the imputed data matrix.
+  
+  In simple words, this metric is made up of the squared error over the deviation of the true underlying data, which normalises the error term and allows for meaningful comparisons across the different column estimates and scenarios. Moreover, for good performance we expect values to be close to zero.
+
+``` {r, echo = TRUE, message = FALSE, fig.height = 6, fig.width = 12}
+
+subset_model_performance <- model_performance[model_performance$type == 'cont', ]
+
+# take group means, where the group of reference is the model
+df <- data.frame(subset_model_performance %>% group_by(model) %>% summarize(mean = mean(abs(performance))))
+
+# set up labels names
+labels <- c("MissForest Imputer", "MICE Imputer", "Simple Imputer")
+
+# plot
+ggplot(subset_model_performance, aes(x = abs(performance), fill = model)) + 
+  geom_histogram(bins = 30, alpha = 0.8) +
+  geom_vline(data = df, aes(xintercept = mean, colour = model), linetype = "dashed", size = 1) +
+  scale_color_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)], labels = labels) + 
+  scale_fill_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)], labels = labels) + 
+  labs(title = "Model Comparison of NRMSE across all Scenarios for Numerical Features",
+       subtitle = "Smaller NRMSE implies better performance", x = "NRMSE", y = "Count")
+
+ggsave("nrmse_comparison.png", plot = last_plot())
+
+```
+
+Snapshot of the first 20 *results, sorted from best to worst,* which confirm what observed in the plot:
+
+``` {r eval = TRUE, echo = FALSE, message = FALSE}
+
+subset <- model_performance[model_performance$performance_type == 'nrmse', ]
+head(subset[order(subset$performance, decreasing = FALSE), c("performance", "performance_type", "model", "type", "% drop")], 20)
+
+```
+
+The results clearly show that on average, as highlighted by the vertical lines, the **missforest imputation modelling performs best, followed by the simple imputer and the mice imputer** in this order. It appears that MissForest, even though it was computationally the most expensive, is a good choice for imputing continuous features.
+
+Moreover, the results in general seem *uneffected by the % of values dropped*.
+
+Due to the multivariate nature of the imputation methods (missForest and MICE) it is apparent that the key driver behind the performance is how explanatory the predictor columns are for the randomly chosen columns to impute. Due to the key difference in assumptions between missForest and MICE, namely *non-parametric vs parametric* approach, it seems that the continuous features are better explained by non-linear relationships with the explanatory columns. Even though finding the explanatory columns was not of interest in this simulation study, it is still an interesting realisation of the results. The predictive power of the features will be explored in the later part of the project. 
+
+* **Accuracy** for the *Categorical Features*
+
+  Recall accuracy is the sum the counts in the *diagonal* of the confusion matrix (True Positive and True Negative) and divide by the sum of all entries in the confusion matrix.
+
+  In simple words, it captures how many imputed values were correctly identified over the total number of values which were imputed. Moreover, good performance leads to a value close to 1 and bad performance to a value around 0.
+
+``` {r, echo = FALSE, message = FALSE, fig.height = 6, fig.width = 12}
+
+subset_model_performance <- model_performance[model_performance$type == 'cat', ]
+
+# take group means, where the group of reference is the model
+df <- data.frame(subset_model_performance %>% group_by(model) %>% summarize(mean = mean(abs(performance))))
+
+# set up labels names
+labels <- c("MICE Imputer", "Simple Imputer", "MissForest Imputer")
+
+# plot
+ggplot(subset_model_performance, aes(x = abs(performance), fill = model)) + 
+  geom_histogram(bins = 30, alpha = 0.8) +
+  geom_vline(data = df, aes(xintercept = mean, colour = model), linetype = "dashed", size = 1) +
+  scale_color_manual(values = c(brewer.pal(9, "YlGnBu"))[c(6, 8, 4)], labels = labels) + 
+  scale_fill_manual(values = c(brewer.pal(9, "YlGnBu"))[c(6, 8, 4)], labels = labels) + 
+  labs(title = "Model Comparison of Accuracy across all Scenarios for Categorical Features",
+       subtitle = "Larger accuracy implies better performance", x = "Accuracy", y = "Count")
+
+ggsave("accuracy_comparison.png", plot = last_plot())
+  
+```
+
+Snapshot of the first 20 *results, sorted from best to worst,* which confirm what observed in the plot:
+
+``` {r eval = TRUE, echo = FALSE, message = FALSE}
+
+subset <- model_performance[model_performance$performance_type == 'accuracy', ]
+head(subset[order(subset$performance, decreasing = TRUE), c("performance", "performance_type", "model", "type", "% drop")], 20)
+
+```
+
+For accuracy results we observe a different outcome, with the **univariate imputer performing best, mice following in second place and missforest placing last**. This is likely due to the fundamental assumptions of the multivariate methods not being met by the data. The chosen predictor continuous covariate $\text{cont0}$ is likely not indicative of the behaviour of the randomly chosen categorical columns to impute.
+
+This is a clear case of the strength of the simple imputer on average, given that we have a very complex structure of the data and finding the appropriate predictor columns can often be a challenge. In these instances where the relationship of the data is not immediately clear, it could be often recommended to rely on a univariate imputation method. In both scenarios, continuous and discrete, the simple imputer performs well overall.  
+
+***
+
+## Mean Difference Estimates
+
+#### Take a look at the estimated output
+
+A snapshot of this dataframe can be seen below
+
+``` {r}
+
+head(mean_diff_estimates, 20)
+
+```
+
+##### What do I mean by mean difference?
+
+A good way to assess model performance in this instance, is to take a look at the **ability of each model to correctly impute the missing values**. This measure is obtained by taking the **average of the differences** between all the imputed values $\bar{x}_{\text{imp}, i}$ for column $i$ and all the true values $\bar{x}_{\text{true}, i}$ for column $i$.
+
+Hence: $MD_i = mean(\bar{x}_{\text{imp}, i} - \bar{x}_{\text{true}, i})$
+
+This measure is computed for each column of interest, where the column i was randomly chosen in the simulation as the column to drop values from, and for each scenario combination, where the scenario combinations are {cont_only, 0.1}, {cat_only, 0.1}, {both, 0.1}, {cont_only, 0.2}, ... .
+
+##### How do I make use of these measures?
+
+First, one may wish to take a look at a group comparison. This can help highlight better performing models against poorer performing models in one go.
+
+* For *poor performance* of a model, I expect to see the distribution of $MD$ with an overall **mean further away from zero and a high variability**.
+* For *good performance* of a model, I expect to see the distribution of $MD$ with an overall **mean closer to zero and a smaller variability**. 
+
+Therefore;
+
+``` {r, echo = FALSE, message = FALSE, fig.height = 6, fig.width = 14}
+
+# take group means, where the group of reference is the model
+df <- data.frame(mean_diff_estimates %>% group_by(model) %>% summarize(mean = mean(mean_diff)))
+
+# set up labels names
+labels <- c("MissForest Imputer", "MICE Imputer", "Simple Imputer")
+
+# plot
+ggplot(mean_diff_estimates, aes(x = mean_diff, fill = model)) + 
+  geom_histogram(bins = 30, alpha = 0.8) +
+  geom_vline(data = df, aes(xintercept = mean, colour = model), linetype = "dashed", size = 1) +
+  scale_color_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)], labels = labels) + 
+  scale_fill_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)], labels = labels) + 
+  labs(title = "Model Comparison of Absolute Mean Differences across all Scenarios", x = "Subpopulation Mean Difference", y = "Count")
+
+ggsave("md_comparison.png", plot = last_plot())
+  
+```
+
+This plot shows a similar information as the one represented by the NRMSE previously. Here, we have the distribution of the mean differences about zero, and it appears the models perform well with the missforest and the simple imputer head-to-head and the MICE performing worse than them. 
+This confirms the conclusions drawn from the NRMSE metric
+
+***
+
+### Limitations and Areas for Development
+
+* **In terms of the limitations of the study and scenarios**:
+
+  This simulation study captures *only a snapshot of the potential analysis over the imputation methods*. This is due to the simplifying assumptions that had to be made, because of the lack of more powerful equipment and the limited amount of time we had available to work on it.
+
+  It is important to note that the framework and the functions built in this study could support much more complex analysis and scenario building. However this could not be explored further for this report, for the same reasons mentioned above.
+  
+* **In terms of the models chosen**:
+
+  We strongly believe that the models chosen cover a wide range of fundamental assumptions and are therefore suited for this analysis. This enabled us to draw some inference and evaluate likely causes for the poor performance of certain methods such as MICE. However, a more comprehensive way could have been to test the model assumptions first.
+  
+  Moreover, the 'prediction columns' were chosen arbitrarily and *another set of prediction columns could have led to a different outcome*. For this reason a more comprehensive analysis could have been to allow for the training of the multivariate methods on the entire dataset. If it wasn't for the computational limitations, this route could have been preferred.
+
+* **In terms of the performance analysis**:
+
+  We would have also liked to explore further the test statistic of the Difference, and carry out some statistical testing to improve the confidence of our results. One of the possible tests we considered was a **paired t-test** where the pair would be $(X_{\text{imp}}, X_{\text{true})}$, and the null hypothesis would be $H_0 : \mu_{X_{\text{imp}}} = \mu_{X_{\text{true}}})$.
+  
+  This test could have been repeated for each imputed column and could have highlighted the instances for which the imputed values diverged significantly from the true values, to the extent of having to reject the null hypothesis that the difference of the means is zero.
+  
+***
 
 ``` {python echo = FALSE, eval = FALSE, message = FALSE}
 

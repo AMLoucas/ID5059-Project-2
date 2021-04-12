@@ -1,0 +1,312 @@
+\PassOptionsToPackage{unicode=true}{hyperref} % options for packages loaded elsewhere
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provides euro and other symbols
+\else % if luatex or xelatex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage[]{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\usepackage{hyperref}
+\hypersetup{
+            pdftitle={Analysing Simulation Study Results},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage[margin=1in]{geometry}
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+% set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+
+
+\title{Analysing Simulation Study Results}
+\author{}
+\date{\vspace{-2.5em}}
+
+\begin{document}
+\maketitle
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\hypertarget{necessary-libraries}{%
+\subsubsection{Necessary Libraries}\label{necessary-libraries}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(ggplot2)}
+\KeywordTok{library}\NormalTok{(dplyr)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Attaching package: 'dplyr'
+\end{verbatim}
+
+\begin{verbatim}
+## The following objects are masked from 'package:stats':
+## 
+##     filter, lag
+\end{verbatim}
+
+\begin{verbatim}
+## The following objects are masked from 'package:base':
+## 
+##     intersect, setdiff, setequal, union
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(RColorBrewer)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{read-in-results}{%
+\subsubsection{Read in results}\label{read-in-results}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model_performance <-}\StringTok{ }\KeywordTok{readRDS}\NormalTok{(}\StringTok{"imputation_results.rds"}\NormalTok{)}
+\NormalTok{mean_diff_estimates <-}\StringTok{ }\KeywordTok{readRDS}\NormalTok{(}\StringTok{"imputation_results_2.rds"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\hypertarget{model-performance}{%
+\subsection{Model Performance}\label{model-performance}}
+
+\hypertarget{take-a-look-at-the-model-performances-output}{%
+\paragraph{Take a look at the model performances
+output}\label{take-a-look-at-the-model-performances-output}}
+
+A snapshot of this dataframe can be seen below
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{head}\NormalTok{(model_performance, }\DecValTok{15}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    performance performance_type columns  model type % drop
+## 1    1.0000169            nrmse   cont9 simple cont    0.3
+## 2    1.3945263            nrmse   cont9   mice cont    0.3
+## 3    0.9841713            nrmse   cont9 forest cont    0.3
+## 4    1.0000046            nrmse   cont5 simple cont    0.3
+## 5    1.4108656            nrmse   cont5   mice cont    0.3
+## 6    0.9990116            nrmse   cont5 forest cont    0.3
+## 7    1.0002179            nrmse   cont9 simple cont    0.2
+## 8    1.3902305            nrmse   cont9   mice cont    0.2
+## 9    0.9822623            nrmse   cont9 forest cont    0.2
+## 10   1.0000021            nrmse   cont5 simple cont    0.2
+## 11   1.4002173            nrmse   cont5   mice cont    0.2
+## 12   0.9908740            nrmse   cont5 forest cont    0.2
+## 13   1.0000000            nrmse   cont9 simple cont    0.1
+## 14   1.4196324            nrmse   cont9   mice cont    0.1
+## 15   0.9723497            nrmse   cont9 forest cont    0.1
+\end{verbatim}
+
+The measures of model performance chosen have been the:
+
+\begin{itemize}
+\item
+  \textbf{Normalised Root Mean Squared Error} for the \emph{Continuous
+  Features}.
+
+  Recall, the formula for the NRMSE is
+  \(\sqrt{mean((X_{true} − X_{imp})^2)/var(X_{true})}\), where
+  \(X_{true}\) the complete data matrix and \(X_{imp}\) the imputed data
+  matrix.
+
+  In simple words, this metric is made up of the squared error over the
+  deviation of the true underlying data, which normalises the error term
+  and allows for meaningful comparisons across the different column
+  estimates and scenarios. Moreover, for good performance we expect
+  values to be close to zero.
+\end{itemize}
+
+\includegraphics{MICE-Imputation-Results_files/figure-latex/unnamed-chunk-4-1.pdf}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Accuracy} for the \emph{Categorical Features}
+\end{itemize}
+
+\includegraphics{MICE-Imputation-Results_files/figure-latex/unnamed-chunk-5-1.pdf}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\hypertarget{mean-difference-estimates}{%
+\subsection{Mean Difference Estimates}\label{mean-difference-estimates}}
+
+\hypertarget{take-a-look-at-the-estimated-output}{%
+\paragraph{Take a look at the estimated
+output}\label{take-a-look-at-the-estimated-output}}
+
+A snapshot of this dataframe can be seen below
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{head}\NormalTok{(mean_diff_estimates, }\DecValTok{15}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##        mean_diff  model % drop
+## 1  -0.0011299024 simple    0.3
+## 2   0.0022754617   mice    0.3
+## 3   0.0151230981   mice    0.3
+## 4  -0.0028426041   mice    0.3
+## 5   0.0023161684 forest    0.3
+## 6   0.0007328600 simple    0.3
+## 7   0.0008139346   mice    0.3
+## 8   0.0012448486   mice    0.3
+## 9   0.0045700727   mice    0.3
+## 10  0.0071474805 forest    0.3
+## 11  0.0040413478 simple    0.2
+## 12  0.0257665885   mice    0.2
+## 13 -0.0126167648   mice    0.2
+## 14  0.0045644662   mice    0.2
+## 15 -0.0112796256 forest    0.2
+\end{verbatim}
+
+\hypertarget{mean-difference-between-the-true-values-and-the-imputed-values}{%
+\subsubsection{1. Mean Difference between the True Values and the
+Imputed
+Values}\label{mean-difference-between-the-true-values-and-the-imputed-values}}
+
+\hypertarget{a-visualisations-and-initial-exploration}{%
+\paragraph{a) Visualisations and Initial
+Exploration}\label{a-visualisations-and-initial-exploration}}
+
+\hypertarget{what-do-i-mean-by-mean-difference}{%
+\subparagraph{What do I mean by mean
+difference?}\label{what-do-i-mean-by-mean-difference}}
+
+A good way to assess model performance in this instance, is to take a
+look at the \textbf{ability of each model to correctly impute the
+missing values}. This measure is obtained by taking the \textbf{average
+of the differences} between all the imputed values
+\(\bar{x}_{\text{imp}, i}\) for column \(i\) and all the true values
+\(\bar{x}_{\text{true}, i}\) for column \(i\).
+
+Hence:
+\(MD_i = mean(\bar{x}_{\text{imp}, i} - \bar{x}_{\text{true}, i})\)
+
+This measure is computed for each column of interest, where the column i
+was randomly chosen in the simulation as the column to drop values from,
+and for each scenario combination, where the scenario combinations are
+\(\text{\{cont_only, 0.1\}}\), \(\text{\{cat_only, 0.1\}}\),
+\(\text{\{both, 0.1\}}\), \(\text{\{cont_only, 0.2\}}\), \ldots{}.
+
+\hypertarget{how-do-i-make-use-of-these-measures}{%
+\subparagraph{How do I make use of these
+measures?}\label{how-do-i-make-use-of-these-measures}}
+
+First, one may wish to take a look at a group comparison. This can help
+highlight better performing models against poorer performing models in
+one go.
+
+\begin{itemize}
+\tightlist
+\item
+  For \emph{poor performance} of a model, I expect to see the
+  distribution of \(\bar{D}\) with an overall \textbf{mean further away
+  from zero and a high variability}.
+\item
+  For \emph{good performance} of a model, I expect to see the
+  distribution of \(\bar{D}\) with an overall \textbf{mean closer to
+  zero and a smaller variability}.
+\end{itemize}
+
+Therefore;
+
+\includegraphics{MICE-Imputation-Results_files/figure-latex/unnamed-chunk-7-1.pdf}
+
+\end{document}
