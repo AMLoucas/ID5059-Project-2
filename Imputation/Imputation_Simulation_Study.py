@@ -13,6 +13,7 @@ import sys as sys
 from sklearn.impute import SimpleImputer
 
 # for performance
+from math import sqrt
 from sklearn import metrics
 from scipy.stats import norm
 import random
@@ -157,28 +158,22 @@ def performance_metrics(imputed_values, true_values):
 
         # 1. Raw bias (RB)
         #    The difference between the expected value of the estimate and truth
-        RB = np.array(imputed_values) - np.array(true_values)
-        sample_mean = np.mean(RB)
-        sample_sd = np.sqrt(np.var(RB))
+        D = np.array(imputed_values) - np.array(true_values)
+        sample_mean = np.mean(D)
+        sample_sd = np.sqrt(np.var(D))
 
         #    Sexy Plot
-        ci = norm(*norm.fit(RB)).interval(0.95)  # fit a normal distribution and get 95% c.i.
-        height, bins, patches = plt.hist(RB, alpha = 0.3)
+        ci = norm(*norm.fit(D)).interval(0.95)  # fit a normal distribution and get 95% c.i.
+        height, bins, patches = plt.hist(D, alpha = 0.3)
         plt.fill_betweenx([0, height.max()], ci[0], ci[1], color = 'g', edgecolor = 'white', alpha = 0.1)  # Mark between 0 and the highest bar in the histogram
 
         # 2. Percentage bias (PB)
-        PB = 100 * abs((np.array(imputed_values) - np.array(true_values))/np.array(true_values))
+        PD = 100 * abs((np.array(imputed_values) - np.array(true_values))/np.array(true_values))
 
-        # 3. Coverage rate (CR).
-        #    The coverage rate (CR) is the proportion of confidence intervals that contain the true value.
+        # 3. Normalised Root Mean Squared Error
+        RMSE = sqrt(metrics.mean_squared_error(true_values, imputed_values)/np.var(true_values))
 
-        # 4. Average width (AW)
-        #    The average width of the confidence interval is an indicator of statistical efficiency.
-
-        # 5. RMSE
-        #    While the RMSE is widely used, it is not a suitable metric to evaluate multiple imputation methods.
-
-        return(RB, PB, sample_mean, sample_sd)
+        return(D, PD, sample_mean, sample_sd, RMSE)
 
     else:
 

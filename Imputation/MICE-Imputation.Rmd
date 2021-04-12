@@ -1,3 +1,10 @@
+---
+title: "ID5059 - Imputation"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
 ## Python and R Hybrid
 
 How can we use both?
@@ -19,7 +26,7 @@ All other requirements for this document:
 
 ``` {r echo = FALSE, message = FALSE, warning=FALSE}
 
-# For
+# For general use
 library(dplyr)         # Allows to use '%>%' and handy functions that help with data wrnagling.
 library(tidyr)         # Allows to use method 'gather()'
 
@@ -113,8 +120,6 @@ def remove_random_values(true_df, columns, percentage):
     :return: pandas DataFrame of the same shape as the original with NaN entries
     """
 
-    start = time.time()
-    
     # Set up: Focus on subset of data dependent on columns,
     #         hence extract information about subset and number of values to drop
     subset = true_df[columns].copy()
@@ -144,9 +149,6 @@ def remove_random_values(true_df, columns, percentage):
     true_df.update(subset)
     true_df = true_df.replace('nan', np.nan)
     true_df = true_df.replace(-1, np.nan)
-
-    end = time.time()
-    print("Random Sampling Complete - Time Elapsed : ", end - start)
 
     return(true_df)
 
@@ -203,9 +205,6 @@ def univariate_imputation_method(nans_df):
     :param nans_df: pandas DataFrame which has missing data - subset on the columns to impute only
     :return: the imputed dataset
     """
-    
-    # Start time
-    start = time.time()
 
     # Dataset that will be imputed and returned to main
     imputed_data = nans_df.copy()
@@ -222,11 +221,6 @@ def univariate_imputation_method(nans_df):
         
         # Imputing the specific column with the appropriate specific tactic
         imputed_data[column] = imputer_tactic.fit_transform(imputed_data[column].values.reshape(-1,1))[:,0]
-
-
-    end = time.time()
-
-    print("Most Frequent Imputation Complete - Time Elapsed :", end - start)
 
     return imputed_data
 
@@ -246,6 +240,7 @@ For this analysis we focused on two key approaches.
 
 ## FUNCTION
 #  Function that reads the true data frame we want to apply imputation research on.
+#  Easier to construct a function for it so we can call it directly from R
 ## INPUTS
 #  full_path: string input representing path to the full training data
 ## OUTPUT
@@ -253,7 +248,7 @@ For this analysis we focused on two key approaches.
 def read_true_values(full_path):
   true_df = pd.read_csv(full_path)
   return(true_df)
-
+  
 ```
 
 ##### MICE Fitting and Function
@@ -280,6 +275,8 @@ The **default methods used** are:
 
 ``` {r message = FALSE, eval = TRUE, warning = FALSE}
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 ### FUNCTION
 # Function that imputes missing values using the 'mice' machine learning algorithm.
 ## INPUT
@@ -289,16 +286,14 @@ The **default methods used** are:
 # (data frame's) that data was imputed with mice. According to the variable m is the number of data frames.
 impute_using_mice <- function(nans_df, columns) {
   
-  start_time <- Sys.time()
-
-  imp_df_mice <- mice(nans_df[columns], m = 3, maxit = 5) #, seed = 5059)
-  
-  end_time <- Sys.time()
-  print(paste("Time taken to impute using MICE is: ", (end_time - start_time)))
+  imp_df_mice <- mice(nans_df[columns], m = 3, maxit = 5, print = FALSE)
   
   return(imp_df_mice)
   
-  }
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 ```
 
 **Notes**;
@@ -309,7 +304,6 @@ impute_using_mice <- function(nans_df, columns) {
 
   Which indicates to me that all categorical variables may be drawn from the exact same sampling and that the labelling has no true meaning.
   Hence, for some meaningful predictions I kept a continuous feature `cont0` as the main predictor for both categorical features to impute.
-
 
 ##### MissForest Fitting and Function
 
@@ -336,6 +330,8 @@ We can apply the MissForest imputation method using R package 'missForest' provi
 
 ``` {r message = FALSE, eval = TRUE, warning = FALSE}
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 ### FUNCTION
 # Function that imputes missing values using the 'missForest' machine learning algorithm.
 ## INPUT
@@ -345,16 +341,13 @@ We can apply the MissForest imputation method using R package 'missForest' provi
 # (data frame) that data was imputed with missForest
 impute_using_missForest <- function(nans_df, columns) {
   
-  start_time <- Sys.time()
-  
-  imp_df_forest <- missForest(nans_df[columns])$ximp
-  
-  end_time <- Sys.time()
-  print(paste("Time taken to impute using missForest is: ", (end_time - start_time)))
+  imp_df_forest <- missForest(nans_df[columns], maxiter = 5)$ximp
   
   return(imp_df_forest)
   
 }
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ```
 
@@ -406,10 +399,6 @@ impute_using_missForest <- function(nans_df, columns) {
 * **Accuracy** : sum the counts in the *diagonal* of the confusion matrix (True Positive and True Negative) and divide by the sum of all entries in the confusion matrix.
 
     *Good performance leads to a value close to 1 and bad performance to a value around 0.*
-
-* **Proportion of falsely classified** (PFC) : sum the counts in the *off diagonal* of the confusion matrix (False Negative and False Positive) and divide by the sum of all entries in the confusion matrix.
-
-    *Good performance leads to a value close to 0 and bad performance to a value around 1.*
 
 ##### Functions to Evaluate Performance Metrics (Python)
 
@@ -470,10 +459,6 @@ def performance_metrics(imputed_values, true_values):
         # Accuracy
         accuracy = metrics.accuracy_score(true_values, imputed_values)
 
-        # Precision
-        # precision = metrics.precision_score(true_values, imputed_values)
-        # todo: fix - precision not working as it requires a 'positive' label, it could work better if I encoded the categories
-
         return(conf_matrix, accuracy)
 
     # If Numerical Feature
@@ -483,16 +468,14 @@ def performance_metrics(imputed_values, true_values):
         D = np.array(imputed_values) - np.array(true_values)
         sample_mean = np.mean(D)
         sample_sd = np.sqrt(np.var(D))
-
-        #    Plot
-        # ci = norm(*norm.fit(D)).interval(0.95)
-        # height, bins, patches = plt.hist(D, alpha = 0.3)
-        # plt.fill_betweenx([0, height.max()], ci[0], ci[1], color = 'g', edgecolor = 'white', alpha = 0.1)
         
         # 2. The percentage difference between the imputed value and truth
         PD = 100 * abs((np.array(imputed_values) - np.array(true_values))/np.array(true_values))
+        
+        # 3. Normalised Root Mean Squared Error
+        RMSE = sqrt(mean_squared_error(true_values, imputed_values)/np.var(true_values))
 
-        return(D, PD, sample_mean, sample_sd)
+        return(D, PD, sample_mean, sample_sd, RMSE)
 
     else:
 
@@ -505,6 +488,8 @@ def performance_metrics(imputed_values, true_values):
 
 ``` {r message = FALSE, warning=FALSE}
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 ## FUNCTION
 #  Function to extract true values and imputed values and compute performance metrics for mice.
 ## INPUTS
@@ -516,65 +501,72 @@ def performance_metrics(imputed_values, true_values):
 #    for categorical - measures of accuracy and the confusion matrix
 #    for numerical - measures of raw difference and percentage difference between
 #                   imputed value and true value
+## NOTE
+# number_iterations : Number of iterations mice has done.
+# Each iteration computes a different imputation, we will find results from all imputations and get their average values.
 performance_results_mice <- function(true_df, imp_df, columns) {
   
-  start_time <- Sys.time()
+  # Set up
   
-  # number_iterations : Number of iterations mice has done.
-  # Each iteration computes imputation valus
-  # We will find results from all values and get their average values.
   number_iterations <- ncol(imp_df$imp[[columns[1]]])
-  
-  # empty storages to fill with the metrics. [ALL metrics and can be indexed with $]
   all_results <- list()
 
   # For each column we imputed values we will found a metric.
   for (column in columns) {
   
-    # extract true values to compare with imputed.
+    # 1. Extract True and Imputed
+    
+    # a) extract row indexes containing imputed values
     imp_rows <- row.names(imp_df$imp[[column]])
+    
+    # b) use row indexes to find true values
     truth <- data.frame(true_df[[column]])[imp_rows, ]
     
-    accuracies <- c()
-    # Check if it is continuous or categorical values to apply appropriate computations.
+    # 2. Check if it is continuous or categorical values to apply appropriate computations.
+    
+    # a) If categorical column
     if (startsWith(column, "cat")) {
       
+      accuracies <- c()
+      
       for (i in 1:number_iterations) {
-
         # extract imputed values for each iteration of mice.
         pred <- imp_df$imp[[column]][[i]]
-
+        # compute metrics
         analysis_table <- table(pred, truth)
         res <- confusionMatrix(analysis_table)
         accuracies <- c(accuracies, res$overall[1])
-        # - - - 
       }
       
-    # store results for each column.
     all_results$conf_matrix[[column]] <- res$table
     all_results$accuracy[[column]] <- mean(accuracies)
     
+    # b) If numerical column
     } else {
       
-    # Subtracting the true - pred to get the difference from two vectors.
-    # Where equal we expect 0. If imputed overestimating +, IF imputed underestimating -.
-    # Result will be 3 columns, difference for each imputation run.
     all_results$D[[column]] <- truth - imp_df$imp[[column]][,]
     all_results$PD[[column]] <- 100 * abs((truth - imp_df$imp[[column]][,]) / truth)
     all_results$mean[[column]] <- colMeans(all_results$D[[column]])
     all_results$sd[[column]] <- colVars(as.matrix(all_results$D[[column]]))
+    
+    nrmse <- c()
+    for (i in 1:number_iterations) {
+      # extract imputed values for each iteration of mice.
+      pred <- imp_df$imp[[column]][[i]]
+      # compute metrics
+      nrmse <- c(nrmse, sqrt((RMSE(pred, truth))^2/var(truth)))
+    }
+    
+    all_results$nrmse[[column]] <- mean(nrmse)
 
     }
   }
   
-  end_time <- Sys.time()
-  print(paste("Time taken to compute MICE metrics is: ", (end_time - start_time)))
-  # Returning list that holds all values tha can be indexed with '$'
   return(all_results)
   
 }
 
-# - - - - 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ## FUNCTION
 #  Function to extract true values and imputed values and compute performance metrics for missForest.
@@ -589,102 +581,195 @@ performance_results_mice <- function(true_df, imp_df, columns) {
 #    for numerical - measures of raw difference and percentage difference between
 performance_results_missForest <- function(true_df, imp_df, nans_df, columns) {
   
-  start_time <- Sys.time()
-
-  # empty storages to fill with the metrics. [ALL metrics and can be indexed with $]
   all_results <- list()
 
-  # For each column we imputed values we will found a metric.
+  # For each column we imputed values we will find a metric.
   for (column in columns) {
     
-    # extract true values to compare with imputed.
+    # 1. Extract True and Imputed
+    
+    # a) extract true values to compare with imputed.
     rows_imputed <- nans_df %>%
       mutate(row_names = row.names(nans_df)) # Creating a row_id in data frame.
     
-    # Keeps rows that have NA values in column only.
+    # b) Keeps rows that have NA values in column only.
     rows_imputed <- rows_imputed[is.na(rows_imputed[[column]]), ] 
     
-    # Extract the cells for true and imputed values to compare between.
+    # c) Extract the cells for true and imputed values to compare between.
     truth <- data.frame(true_df[[column]])[rows_imputed[["row_names"]], ]
     pred <- data.frame(imp_df[[column]])[rows_imputed[["row_names"]], ]
     
-    accuracies <- c()
-    # Check if it is continuous or categorical values to apply appropriate computations.
+    # 2. Check if it is continuous or categorical values to apply appropriate metrics.
+    
+    # a) If categorical column
     if (startsWith(column, "cat")) {
+      
+      accuracies <- c()
 
       analysis_table <- table(pred, truth)
       res <- confusionMatrix(analysis_table)
       accuracies <- c(accuracies, res$overall[1])
-      # - - - 
       
-      # store results for each column.
       all_results$conf_matrix[[column]] <- res$table
       all_results$accuracy[[column]] <- mean(accuracies)
       
+    # b) If numerical column
     } else {
       
-    # Subtracting the true - pred to get the difference from two vectors.
-    # Where equal we expect 0. If imputed overestimating +, IF imputed underestimating -.
-    # Result will be 3 columns, difference for each imputation run.
     all_results$D[[column]] <- truth - pred
     all_results$PD[[column]] <- 100 * abs((truth - pred) / truth)
     all_results$mean[[column]] <- mean(all_results$D[[column]])
     all_results$sd[[column]] <- sd(as.matrix(all_results$D[[column]]))
+    all_results$nrmse[[column]] <- sqrt((RMSE(pred, truth))^2/var(truth))
     
     }
   }
-  
-  end_time <- Sys.time()
-  print(paste("Time taken to compute missForest metrics is: ", (end_time - start_time)))
 
   return(all_results)
   
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+```
+
+##### Function to Store Performance Metrics (R)
+
+```{r}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+## FUNCTION
+#  Function to extract all results for statistical testing in one dataframe
+## INPUTS
+#  simple_imputer_result: results from fitting
+#  mice_result: results from fitting
+#  missforest_result: results from fitting
+#  columns: vector input containing strings representing column names which contain imputed values
+## OUTPUT
+#  dataframe
+store_performance_results <- function(simple_imputer_result, mice_result, missforest_result, columns) {
+  
+  final_results <- c()
+  
+  i = 0 
+  # Loop through each column to store respective results of interest
+  for (column in columns) {
+    i = 1 + i
+    
+    if (startsWith(column, "cat")) {
+      # - - - - For Categorical Columns
+      
+      accuracy <- c(simple_imputer_result[[i]]$accuracy, mice_result$accuracy[[i]], missforest_result$accuracy[[i]])
+
+      accuracy_results <- data.frame("performance" = accuracy,
+                                     "performance_type" = rep("accuracy", each = 3),
+                                     "columns" = rep(column, each = 3),
+                                     "model" = c("simple",  "mice", "missforest"),
+                                     "type" = rep("cat", each = 3))
+      
+      final_results <- rbind(final_results, accuracy_results)
+      
+    } else {
+      # - - - - For Numerical Columns
+      
+      if (startsWith(columns[1], "cat") & startsWith(columns[2], "cont")) {
+        i = 1 # little fix for when we have one cat and one cont columns to impute as indexing is different
+        nrmse <- c(simple_imputer_result[[i + 1]]$nrmse, mice_result$nrmse[[i]], missforest_result$nrmse[[i]])
+      } else {nrmse <- c(simple_imputer_result[[i]]$nrmse, mice_result$nrmse[[i]], missforest_result$nrmse[[i]])}
+      
+      nrmse_results <- data.frame("performance" = nrmse,
+                                  "performance_type" = rep("nrmse", each = 3),
+                                  "columns" = rep(column, each = 3),
+                                  "model" = c("simple", "mice", "forest"),
+                                  "type" = rep("cont", each = 3))
+      
+      final_results <- rbind(final_results, nrmse_results)
+
+    }
+    
   }
+  
+  return(final_results)
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+## FUNCTION
+#  Function to extract all mean difference results for statistical testing in one dataframe
+## INPUTS
+#  simple_imputer_result: results from fitting
+#  mice_result: results from fitting
+#  missforest_result: results from fitting
+#  columns: vector input containing strings representing column names which contain imputed values
+## OUTPUT
+#  dataframe 
+store_mean_diff_results <- function(simple_imputer_result, mice_result, missforest_result, columns) {
+  
+  # 1. IF scenario {both}
+  if (startsWith(columns[1], "cat") & startsWith(columns[2], "cont")) {
+    
+    mean_diff <- c(simple_imputer_result[[2]]$mean, mice_result$mean[[1]], missforest_result$mean[[1]])
+    
+    mean_diff_results <- data.frame("mean_diff" = mean_diff,
+                                    "model" = c("simple", rep("mice", 3), "forest"))
+  
+  # 2. IF scenario {cont_only} 
+  } else if (startsWith(columns[1], "cont") & startsWith(columns[2], "cont")) {
+    
+    mean_diff_col_1 <- c(simple_imputer_result[[1]]$mean, mice_result$mean[[1]], missforest_result$mean[[1]])
+    mean_diff_col_2 <- c(simple_imputer_result[[2]]$mean, mice_result$mean[[2]], missforest_result$mean[[2]])
+    
+    mean_diff_results <- data.frame("mean_diff" = c(mean_diff_col_1, mean_diff_col_2),
+                                    "model" = rep(c("simple", rep("mice", 3), "forest"), 2))
+    
+  }
+  
+  return(mean_diff_results)
+
+}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ```
 
 ----
 
-#### ASIDE: need to include **data wrangling functions** to transfer data from python to R
+#### Note: need to include **data wrangling functions** to transfer data from python to R
 
-``` {r message = FALSE, eval = TRUE, echo = FALSE, warning = FALSE}
+``` {r message = FALSE, eval = TRUE, echo = TRUE, warning = FALSE}
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ## FUNCTION
 #  Function wrangles the data in appropriate structure for machine learning imputations.
 ## INPUTS
 #  nans_df: data.frame containing random NA's values
 ## OUTPUT
-#  NA data frames that are in appropriate state.
+#  data frames that are in appropriate state.
 wrangle_data_for_na <- function(nans_df) {
   
-  # note: there is a slight conversion issue between NaN and NA, hence we can explicitly use
-  nans_df[nans_df == 'NA'] = NA
+  # Conversion issue between NaN and NA, hence we can explicitly use
+  nans_df[nans_df == 'NaN'] = NA
   
-  # Converting the data into R data frames.
+  # Converting the data into R data frames
   nans_df <- as.data.frame(nans_df)
   
-  # note: all character types must be changed to factors
-  nans_df <- nans_df %>%
-    mutate_if(is.character, as.factor) # if col is char -> convert to factor
+  # Unlist all of the columns
+  columns <- colnames(nans_df)
+  nans_df <- nans_df %>% mutate(across(all_of(columns), unlist))
   
-  nans_df <- nans_df %>%
-  mutate(cont0 = unlist(cont0), # unlist all continouus variables to be imputed.
-    cont1 = unlist(cont1),
-    cont2 = unlist(cont2),
-    cont3 = unlist(cont3),
-    cont4 = unlist(cont4),
-    cont5 = unlist(cont5),
-    cont6 = unlist(cont6),
-    cont7 = unlist(cont7),
-    cont8 = unlist(cont8),
-    cont9 = unlist(cont9),
-    cont10 = unlist(cont10)
-    )
+  # All character types must be changed to factors
+  nans_df <- nans_df %>% mutate_if(is.character, as.factor)
   
   return(nans_df)
 }
 
-# - - - - 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+```
+
+``` {r message = FALSE, eval = TRUE, echo = FALSE, warning = FALSE}
 
 ## FUNCTION
 #  Function wrangles the data in appropriate structure for machine learning imputations.
@@ -697,15 +782,13 @@ wrangle_data_for_original <- function(true_df) {
   # Converting the data into R data frames.
   true_df <- as.data.frame(true_df)
   
-  # note: all character types must be changed to factors
-  true_df <- true_df %>%
-    mutate_if(is.character, as.factor) # if col is char -> convert to factor
+  # All character types must be changed to factors
+  true_df <- true_df %>% mutate_if(is.character, as.factor)
   
   return(true_df)
 }
 
 ```
-
 
 ``` {r echo = FALSE, eval = TRUE, warning = FALSE}
 ### FUNCTION
@@ -733,11 +816,247 @@ print_metrics_obtained <- function(simulation, columns, simple, mice, forest) {
 
 ### 4. Bringing it all together
 
-#### FULL CODE SIMULATION DEMO AND COMPARISON RESULTS.
+Need to make a loop over all possible scenario combinations.
+
+#### First, load in data.
+
+``` {r echo = TRUE, message = FALSE}
+
+original_df <- py$read_true_values('data/train.csv')
+
+```
+
+#### Second, set up scenarios.
+
+In order to set up the study, we made a few simplyfing assumptions.
+
+* **Choose two columns to be our reference "predictor columns"** for all combinations of the simulation. This is due to how computationally expensive the fitting of the study is and by extension requires simplifying assumptions. By choosing a set of consistent predictor columns across the study, we control for any variability that could be introduced if these predictor columns changed at every iteration.
+
+  Note, we chose a categorical and a numerical feature for the predictions, this is due to a multicollinearity issue in the prediction of multivariate imputation methods if we had only chosen one type. 
+
+``` {r}
+
+columns_predictions_if_cat <- c('cont0')
+columns_predictions_if_cont <- c('cat0')
+columns_predictions_if_both <- c('cat0', 'cont0')
+
+```
+
+* **Block out four categorical variables from the study:** namely cat5, cat7, cat8 and cat10. This is because the number of levels of these categorical variables is over 50 and one of the imputation methods cannot handle with this dimensionality. 
+
+  Note, here we are also removing the predictor columns from the possible random picks of columns to be imputed.
+
+``` {r}
+
+cat_vec <- 1:18
+cat_vec <- cat_vec[!cat_vec %in% c(5, 7, 8, 10)]
+
+cont_vec <- 1:10
+
+```
+
+* At this stage we did not focus on identifying predictive power of features and fine-tuning the imputation modelling for a specific set of features. Due to the randomness element of the study, we simply **choose the columns to be imputed at random**. The only requirement of the study is that you have the same number of occurrences of columns to be imputed which are $\text{\{only continuous, only categorical, both\}}$.
+
+  This is controlled by looping through each combination and picking out a number of simulation as defined by `num_simulations`.
+
+``` {r echo = TRUE, message = FALSE}
+
+combinations <- c("cont_only", "cat_only", "both")
+num_simulations <- 3
+
+i = 0
+columns_combinations <- list()
+for (combination in combinations) {
+  for (iter in 1:num_simulations) {
+    i = 1 + i
+    
+    if (combination == "cont_only") {
+      
+      cont_num <- sample(cont_vec, 2)
+      columns_combinations[[i]] <- c(paste0('cont', cont_num[1]), paste0('cont', cont_num[2]))
+      
+    } else if (combination == "cat_only") {
+      
+      cat_num <- sample(cat_vec, 2)
+      columns_combinations[[i]] <- c(paste0('cat', cat_num[1]), paste0('cat', cat_num[2]))
+      
+    } else if (combination == "both") {
+      
+      cat_num <- sample(cat_vec, 1)
+      cont_num <- sample(cont_vec, 1)
+      columns_combinations[[i]] <- c(paste0('cat', cat_num), paste0('cont', cont_num))
+      
+    }
+  }
+}
+
+```
+
+* **Choose a relevant set of percentages of data that should be dropped**: this is part of the set up of the simulation study and here we are exploring three cases $\text{\{}0.1, 0.2, 0.3\text{\}}$.
+
+``` {r echo = TRUE, message = FALSE}
+
+percentage_drop <- list("large" = 0.3, "medium" = 0.2, "small" = 0.1)
+
+```
+
+* **Choose a subset of the data**: this is due to the computational expense of the runs complessively. In order to be able to run more scenarios in a local machine, we chose to take a subset of the data. This tradeoff was necessary due to the lack of access to a desktop computer and being unable to run this code overnight.
+
+``` {r}
+
+original_df <- original_df[0:100000, ]
+
+```
+
+Then, run the full simulation.
+
+#### Third, full run.
+
+``` {r echo = TRUE, message = FALSE, warning = FALSE}
+
+final_results <- mean_diff_results <- c()
+
+# Simulation Loops
+i = 0
+system.time(for (columns in columns_combinations) {
+  for (percentage in percentage_drop) {
+    
+    i = 1 + i
+  
+    cat("Starting run", i)
+    start_time <- Sys.time()
+    cat(".")
+    
+    ### 1. Drop Values Randomly
+    nans_df <- py$remove_random_values(original_df, columns, percentage)
+    cat(".")
+    
+    ### 2. Simple Imputer
+    simple_imputer <- py$univariate_imputation_method(nans_df[columns])
+    simple_imputer_result <- py$performance_results_py(original_df, simple_imputer, nans_df, columns)
+    cat(".", "\n")
+    
+    mid_time_1 <- Sys.time()
+    cat("Simple Imputer Completed - Time Elapsed :", (mid_time_1 - start_time), '\n')
+    
+    ### 3. Data Wrangling (some Python to R conversions)
+    
+    # a) Appropriately change features of nans_df to R environment
+    nans_df <- wrangle_data_for_na(nans_df)
+
+    # b) Deal with Single Impute Results
+    if (startsWith(columns[1], "cat") & startsWith(columns[2], "cat")) {
+      names(simple_imputer_result[[1]]) <- names(simple_imputer_result[[2]]) <- c("conf_matrix", "accuracy")
+    } else if (startsWith(columns[1], "cont") & startsWith(columns[2], "cont")){
+      names(simple_imputer_result[[1]]) <- names(simple_imputer_result[[2]]) <- c("D", "PD", "mean", "sd", "nrmse")
+    } else {
+      names(simple_imputer_result[[1]]) <- c("conf_matrix", "accuracy")
+      names(simple_imputer_result[[2]]) <- c("D", "PD", "mean", "sd", "nrmse")
+    }
+    names(simple_imputer_result) <- c(columns[1], columns[2])
+  
+    ### 4. Multivariate Imputers
+    
+    # a) Set up prediction columns
+    
+    # IF {cat_only} scenario:
+    if (startsWith(columns[1], "cat") & startsWith(columns[2], "cat")) {
+      pred_columns <- unique(c(columns, columns_predictions_if_cat))
+    
+    # IF {cont_only} scenario:
+    } else if (startsWith(columns[1], "cont") & startsWith(columns[2], "cont")) {
+      pred_columns <- unique(c(columns, columns_predictions_if_cont))
+      
+    # IF {both} scenario:
+    } else { pred_columns <- unique(c(columns, columns_predictions_if_both)) }
+    
+    # b) MICE Imputer
+    mice_imputer <- impute_using_mice(nans_df, pred_columns)
+    mice_result <- performance_results_mice(original_df, mice_imputer, columns)
+    
+    mid_time_2 <- Sys.time()
+    cat("MICE Imputer Completed - Time Elapsed :", (mid_time_2 - mid_time_1), '\n')
+    
+    # c) MissForest Imputer
+    missforest_imputer <- invisible(impute_using_missForest(nans_df, pred_columns))
+    missforest_result <- performance_results_missForest(original_df, missforest_imputer, nans_df, columns)
+    
+    mid_time_3 <- Sys.time()
+    cat("MissForest Imputer Completed - Time Elapsed :", (mid_time_3 - mid_time_2), '\n')
+    
+    ### 5. Store Results
+    
+    iter_results <- store_performance_results(simple_imputer_result, mice_result, missforest_result, columns)
+    iter_results <- cbind(iter_results, "% drop" = c(rep(percentage, each = nrow(iter_results))))
+    final_results <- rbind(final_results, iter_results)
+    
+    # IF {cont_only, both} scenarios:
+    if (startsWith(columns[1], "cont") & startsWith(columns[2], "cont") | startsWith(columns[1], "cat") & startsWith(columns[2], "cont")) {
+      iter_results <- store_mean_diff_results(simple_imputer_result, mice_result, missforest_result, columns)
+      iter_results <- cbind(iter_results, "% drop" = c(rep(percentage, each = nrow(iter_results))))
+      mean_diff_results <- rbind(mean_diff_results, iter_results)
+    }
+    
+    end_time <- Sys.time()
+    cat("Time taken to compute full run", i, "for column combination", columns, "is :", (end_time - start_time), '\n')
+    
+  }
+})
+
+```
+
+A snapshot of the results:
+
+**NRMSE** : *results sorted from best to worst*
+
+``` {r echo = TRUE, message = FALSE}
+
+subset <- final_results[final_results$performance_type == 'nrmse', ]
+head(subset[order(subset$performance, decreasing = FALSE), c("performance", "performance_type", "model", "type", "% drop")], 15)
+
+```
+
+**Accuracy** : *results sorted from best to worst*
+
+``` {r echo = TRUE, message = FALSE}
+
+subset <- final_results[final_results$performance_type == 'accuracy', ]
+head(subset[order(subset$performance, decreasing = TRUE), c("performance", "performance_type", "model", "type", "% drop")], 15)
+
+```
+
+---
+
+Save results!
+
+``` {r echo = TRUE, message = FALSE}
+
+saveRDS(final_results, file = "imputation_results.rds")
+saveRDS(mean_diff_results, file = "imputation_results_2.rds")
+
+```
+
+---
+
+``` {r echo = FALSE}
+
+  # a) Include additional column(s) for prediction
+  # columns_predictions_if_cat <- cat_vec[!cat_vec %in% columns]
+  # columns_predictions_if_cont <- cont_vec[!cont_vec %in% columns]
+  # columns_predictions_if_both <- c(columns_predictions_if_cat, columns_predictions_if_cont)
+
+  # b) Select appropriate case
+  if (startsWith(columns[1], "cat") & startsWith(columns[2], "cat")) {
+    pred_columns <- unique(c(columns, columns_predictions_if_cat))
+  } else if (startsWith(columns[1], "cont") & startsWith(columns[2], "cont")) {
+    pred_columns <- unique(c(columns, columns_predictions_if_cont))
+  } else { pred_columns <- unique(c(columns, columns_predictions_if_both)) }
+
+```
+
+``` {python echo = FALSE, eval = FALSE, message = FALSE}
 
 ##### a) READING DATA AND UNIVARIATE IMPUTATION (PYTHON)
-
-``` {python echo = TRUE, message = FALSE}
 
 ### READING AND REPLACING DATA WITH NA'S ##
 
@@ -776,7 +1095,7 @@ nans_one = nans_one.replace(np.nan, 'NA')
 
 ```
 
-``` {r echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
+``` {r echo = FALSE, eval = FALSE, message = FALSE, warning = FALSE}
 
 # Need to bring original and random removal data in the R enviroment.
 
@@ -802,7 +1121,7 @@ original_df <- wrangle_data_for_original(original_df)
 
 ```
 
-``` {r echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
+``` {r echo = FALSE, eval = FALSE, message = FALSE, warning = FALSE}
 
 # Transferring Simple Imputer Results to R
 
@@ -813,11 +1132,11 @@ names(simple_imputer_one_results) <- c(py$column_one[1], py$column_one[2])
 
 ```
 
+``` {r echo = FALSE, eval = FALSE, message = FALSE, warning = FALSE}
+
 ##### b) MICE IMPUTATION (R)
 
-Imputing data using MICE.
-
-``` {r echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+# Imputing data using MICE.
 
 mice_imputer_one <- impute_using_mice(nans_one, column_one)
 # mice_imputer_two <- impute_using_mice(nans_two, column_two)
@@ -825,7 +1144,7 @@ mice_imputer_one <- impute_using_mice(nans_one, column_one)
 
 ```
 
-``` {r echo = FALSE, eval = TRUE}
+``` {r echo = FALSE, eval = FALSE}
 
 # Need to remove non imputed columns. 
 column_one = c('cont0', 'cont1')
@@ -834,9 +1153,9 @@ column_three = c('cont0', 'cat0')
 
 ```
 
-Obtaining performance metrics for the MICE imputed data.
+``` {r echo = FALSE, eval = FALSE}
 
-``` {r echo = TRUE, eval = TRUE}
+# Obtaining performance metrics for the MICE imputed data.
 
 mice_result_one <- performance_results_mice(original_df, mice_imputer_one, column_one)
 # mice_result_two <- performance_results_mice(original_df, mice_imputer_two, column_two)
@@ -844,9 +1163,9 @@ mice_result_one <- performance_results_mice(original_df, mice_imputer_one, colum
 
 ```
 
-##### c) MISSFOREST IMPUTATION (R)
+``` {r echo = FALSE, eval = FALSE}
 
-``` {r echo = FALSE, eval = TRUE}
+##### c) MISSFOREST IMPUTATION (R)
 
 # Creating the column vectors being used.
 column_one = c('cont0', 'cont1', 'cat0')
@@ -855,9 +1174,9 @@ column_three = c('cont0', 'cat0', 'cont3')
 
 ```
 
-Imputing Data using missForest.
+``` {r echo = FALSE, eval = FALSE}
 
-``` {r echo = TRUE, eval = TRUE}
+# Imputing Data using missForest.
 
 missForest_imputer_one <- impute_using_missForest(nans_one, column_one)
 # missForest_imputer_two <- impute_using_missForest(nans_two, column_two)
@@ -865,7 +1184,7 @@ missForest_imputer_one <- impute_using_missForest(nans_one, column_one)
 
 ```
 
-``` {r echo = FALSE, eval = TRUE}
+``` {r echo = FALSE, eval = FALSE}
 
 # Need to remove non imputed columns. 
 column_one = c('cont0', 'cont1')
@@ -874,9 +1193,9 @@ column_three = c('cont0', 'cat0')
 
 ```
 
-Obtaining performance metrics for the missforest imputed data.
+``` {r echo = FALSE, eval = FALSE}
 
-``` {r echo = TRUE, eval = TRUE}
+# Obtaining performance metrics for the missforest imputed data.
 
 missForest_result_one <- performance_results_missForest(original_df, missForest_imputer_one, nans_one, column_one)
 # missForest_result_two <- performance_results_missForest(original_df, missForest_imputer_two, nans_two, column_two)
@@ -884,21 +1203,20 @@ missForest_result_one <- performance_results_missForest(original_df, missForest_
 
 ```
 
+``` {r echo = FALSE, eval = FALSE, warning = FALSE}
+
 ##### c) FINAL SCORES
 
-The final scores of the mean difference between true and predicted, as well as their respective standard deviations are:
-
-``` {r echo = FALSE, eval = TRUE, warning = FALSE}
+# The final scores of the mean difference between true and predicted, as well as their respective standard deviations are:
 
 # Compare results final.
 print_metrics_obtained("One", column_one, simple_imputer_one_results, mice_result_one, missForest_result_one)
 
 ```
 
-
+``` {r  eval = FALSE, echo = FALSE, warning = FALSE}
 ##### PLOTS
 
-``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
 ### FUNCTION
 ## Function to plot density plots to comparing numeric column imputations
 ## Input
@@ -940,7 +1258,7 @@ plot_density("One 'cont0'",
 
 ```
 
-``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+``` {r  eval = FALSE, echo = FALSE, warning = FALSE}
 ### FUNCTION
 ## Function to plot error plots to comparing numeric column imputations
 ## Input
@@ -978,7 +1296,7 @@ plot_error("One 'cont0'",
 ```
 
 
-``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+``` {r  eval = FALSE, echo = FALSE, warning = FALSE}
 actual_plot <- function(title, dataPlot) {
     # Giving appropriate title for graph.
   title <- paste(title)
@@ -1025,7 +1343,7 @@ rm(list = c("Simple", "Mice", "MissForest", "plotingData"))
 
 ```
 
-``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+``` {r  eval = FALSE, echo = FALSE, warning = FALSE}
 ####################
 # WILL BE INPUTTED IN FUNCTION
 ###################
@@ -1103,7 +1421,7 @@ plot_density_histogram("One 'cont0'",
 
 
 
-``` {r  eval = TRUE, echo = TRUE, warning = FALSE}
+``` {r  eval = FALSE, echo = FALSE, warning = FALSE}
 ####################
 # TESTER TO FIX ERRORS IN ONE PLOT.
 ###################
@@ -1153,13 +1471,6 @@ plot_density_with_CI("One 'cont0'",
 ```
 
 ***
-
-
-
-
-
-
-### Ignore for now
 
 ``` {python echo = FALSE, eval = FALSE}
 
