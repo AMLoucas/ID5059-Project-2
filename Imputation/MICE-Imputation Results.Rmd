@@ -1,0 +1,159 @@
+---
+title: "Analysing Simulation Study Results"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+---
+
+***
+
+### Necessary Libraries
+
+``` {r. message = FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(RColorBrewer)
+
+```
+
+### Read in results
+
+``` {r}
+
+model_performance <- readRDS("imputation_results.rds")
+mean_diff_estimates <- readRDS("imputation_results_2.rds")
+
+```
+
+***
+
+## 1. Model Performance
+
+#### Take a look at the model performances output
+
+A snapshot of this dataframe can be seen below
+
+``` {r}
+
+head(model_performance, 15)
+
+```
+
+The measures of model performance chosen have been the:
+
+* **Normalised Root Mean Squared Error** for the *Continuous Features*.
+
+  Recall, the formula for the NRMSE is $\sqrt{mean((X_{true} − X_{imp})^2)/var(X_{true})}$, where $X_{true}$ the complete data matrix and $X_{imp}$ the imputed data matrix.
+  
+  In simple words, this metric is made up of the squared error over the deviation of the true underlying data, which normalises the error term and allows for meaningful comparisons across the different column estimates and scenarios. Moreover, for good performance we expect values to be close to zero.
+
+``` {r, echo = FALSE, message = FALSE, fig.width = 12}
+
+subset_model_performance <- model_performance[model_performance$type == 'cont', ]
+
+# take group means, where the group of reference is the model
+df <- data.frame(subset_model_performance %>% group_by(model) %>% summarize(mean = mean(abs(performance))))
+
+# set up labels names
+labels <- c("MissForest Imputer", "MICE Imputer", "Simple Imputer")
+
+# plot
+ggplot(subset_model_performance, aes(x = abs(performance), fill = model)) + 
+  geom_histogram(bins = 30, alpha = 0.8) +
+  geom_vline(data = df, aes(xintercept = mean, colour = model), linetype = "dashed", size = 1) +
+  scale_color_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)], labels = labels) + 
+  scale_fill_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)], labels = labels) + 
+  labs(title = "Model Comparison of NRMSE across all Scenarios for Numerical Features",
+       subtitle = "Smaller NRMSE implies better performance", x = "NRMSE", y = "Count")
+
+```
+
+* **Accuracy** for the *Categorical Features*
+
+  Recall accuracy is the sum the counts in the *diagonal* of the confusion matrix (True Positive and True Negative) and divide by the sum of all entries in the confusion matrix.
+
+  In simple words, it captures how many imputed values were correctly identified over the total number of values which were imputed. Moreover, good performance leads to a value close to 1 and bad performance to a value around 0.
+
+``` {r, echo = FALSE, message = FALSE, fig.width = 12}
+
+subset_model_performance <- model_performance[model_performance$type == 'cat', ]
+
+# take group means, where the group of reference is the model
+df <- data.frame(subset_model_performance %>% group_by(model) %>% summarize(mean = mean(abs(performance))))
+
+# set up labels names
+labels <- c("MissForest Imputer", "MICE Imputer", "Simple Imputer")
+
+# plot
+ggplot(subset_model_performance, aes(x = abs(performance), fill = model)) + 
+  geom_histogram(bins = 30, alpha = 0.8) +
+  geom_vline(data = df, aes(xintercept = mean, colour = model), linetype = "dashed", size = 1) +
+  scale_color_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)],  labels = labels) + 
+  scale_fill_manual(values = c(brewer.pal(9, "YlGnBu"))[c(4, 6, 8)],  labels = labels) + 
+  labs(title = "Model Comparison of Accuracy across all Scenarios for Categorical Features",
+       subtitle = "Larger accuracy implies better performance", x = "NRMSE", y = "Count")
+  
+```
+
+***
+
+## Mean Difference Estimates
+
+#### Take a look at the estimated output
+
+A snapshot of this dataframe can be seen below
+
+``` {r}
+
+head(mean_diff_estimates, 15)
+
+```
+
+### 2. Mean Difference between the True Values and the Imputed Values
+
+#### a) Visualisations and Initial Exploration
+
+##### What do I mean by mean difference?
+
+A good way to assess model performance in this instance, is to take a look at the **ability of each model to correctly impute the missing values**. This measure is obtained by taking the **average of the differences** between all the imputed values $\bar{x}_{\text{imp}, i}$ for column $i$ and all the true values $\bar{x}_{\text{true}, i}$ for column $i$.
+
+Hence: $MD_i = mean(\bar{x}_{\text{imp}, i} - \bar{x}_{\text{true}, i})$
+
+This measure is computed for each column of interest, where the column i was randomly chosen in the simulation as the column to drop values from, and for each scenario combination, where the scenario combinations are $\text{\{cont_only, 0.1\}}$, $\text{\{cat_only, 0.1\}}$, $\text{\{both, 0.1\}}$, $\text{\{cont_only, 0.2\}}$, ... .
+
+##### How do I make use of these measures?
+
+First, one may wish to take a look at a group comparison. This can help highlight better performing models against poorer performing models in one go.
+
+* For *poor performance* of a model, I expect to see the distribution of $MD$ with an overall **mean further away from zero and a high variability**.
+* For *good performance* of a model, I expect to see the distribution of $MD$ with an overall **mean closer to zero and a smaller variability**. 
+
+Therefore;
+
+``` {r, echo = FALSE, message = FALSE, fig.width = 14}
+
+library(ggplot2)
+library(dplyr)
+
+# take group means, where the group of reference is the model
+df <- data.frame(mean_diff_estimates %>% group_by(model) %>% summarize(mean = mean(abs(mean_diff))))
+
+# set up labels names
+labels <- c("MissForest Imputer", "MICE Imputer", "Simple Imputer")
+
+# plot
+ggplot(mean_diff_estimates, aes(x = abs(mean_diff), fill = model)) + 
+  geom_histogram(bins = 30, alpha = 0.8) +
+  geom_vline(data = df, aes(xintercept = mean, colour = model), linetype = "dashed", size = 1) +
+  scale_color_brewer(name = "Models", labels = labels, palette="YlOrBr") + 
+  scale_fill_brewer(name = "Models", labels = labels, palette="YlOrBr") +
+  labs(title = "Model Comparison of Absolute Mean Differences across all Scenarios", x = "Subpopulation Mean Difference", y = "Count")
+  
+```
+
+
+
+
